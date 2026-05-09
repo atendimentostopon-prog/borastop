@@ -1,13 +1,14 @@
-import React, { ReactNode } from "react";
+import React from 'react';
+import { cn } from '@/lib/utils';
 
 interface CardProps {
-  children: ReactNode;
+  children: React.ReactNode;
   className?: string;
 }
 
-export default function Card({ children, className = "" }: CardProps) {
+export default function Card({ children, className }: CardProps) {
   return (
-    <div className={`bg-brand-card backdrop-blur-xl border border-white/10 rounded-2xl p-6 shadow-2xl ${className}`}>
+    <div className={cn("bg-brand-card rounded-3xl border border-white/5 overflow-hidden", className)}>
       {children}
     </div>
   );
