@@ -1,34 +1,28 @@
 /**
- * Validador de Variáveis de Ambiente
- * Centraliza o acesso e garante que o app não inicie sem as configurações básicas.
+ * Bora Stop Environment Variables
+ * Centralized validator for environment variables
  */
 
-export const env = {
-  supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-  supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '',
-  isConfigured: Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL && 
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ),
-  isProduction: process.env.NODE_ENV === 'production',
-};
+export function validateEnv() {
+  const required = [
+    'NEXT_PUBLIC_SUPABASE_URL',
+    'NEXT_PUBLIC_SUPABASE_ANON_KEY',
+  ];
 
-// Validação rigorosa em produção
-if (env.isProduction) {
-  const missingVars = [];
-  if (!env.supabaseUrl) missingVars.push('NEXT_PUBLIC_SUPABASE_URL');
-  if (!env.supabaseAnonKey) missingVars.push('NEXT_PUBLIC_SUPABASE_ANON_KEY');
+  const missing = required.filter((key) => !process.env[key]);
 
-  if (missingVars.length > 0) {
-    // No build da Vercel, o log será exibido aqui
-    const errorMsg = `❌ ERRO DE CONFIGURAÇÃO: As seguintes variáveis de ambiente estão faltando: ${missingVars.join(', ')}. ` +
-      `Por favor, adicione-as no painel da Vercel em Project Settings -> Environment Variables.`;
-    
-    // Se for no servidor (build ou runtime), lançamos o erro
-    if (typeof window === 'undefined') {
-      throw new Error(errorMsg);
+  if (missing.length > 0) {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error(`Missing environment variables: ${missing.join(', ')}`);
     } else {
-      console.error(errorMsg);
+      console.warn(`[ENV WARNING] Missing variables: ${missing.join(', ')}`);
     }
   }
+
+  return {
+    supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+  };
 }
+
+export const env = validateEnv();

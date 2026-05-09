@@ -1,32 +1,28 @@
-export interface Player {
-  id: string;
-  name: string; // Used to match nickname in Phase 1
-  score?: number;
-  isReady?: boolean;
-  isOnline?: boolean;
-}
+import type { Database } from './database';
 
-export interface Room {
-  id: string;
-  code: string;
-  name: string;
-  isPrivate: boolean;
-  playersCount: number;
-  maxPlayers: number;
-  rounds: number;
-  status: string;
-  total_rounds?: number;
+export type Room = Database['public']['Tables']['rooms']['Row'] & {
+  playersCount?: number;
+};
+
+export type Player = Database['public']['Tables']['players']['Row'];
+
+export type GameStatus = 'waiting' | 'starting' | 'playing' | 'validating' | 'results' | 'finished';
+
+export interface GameState {
+  roomId: string;
+  roomCode: string;
+  status: GameStatus;
+  currentRound: number;
+  totalRounds: number;
+  letter?: string;
+  hostId: string;
 }
 
 export interface ChatMessage {
   id: string;
-  playerId?: string | null;
-  playerName?: string;
-  text: string;
-  isSystem: boolean;
-}
-
-export interface Category {
-  id: string;
-  name: string;
+  senderName: string;
+  senderId: string;
+  content: string;
+  timestamp: string;
+  type: 'chat' | 'system';
 }

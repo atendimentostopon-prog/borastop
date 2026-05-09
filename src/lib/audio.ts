@@ -1,65 +1,53 @@
-class AudioSystem {
-  private sounds: Record<string, HTMLAudioElement> = {};
-  private muted: boolean = false;
-  private masterVolume: number = 0.5;
+'use client';
 
-  private soundUrls = {
-    join: '/sounds/join.mp3',
-    ready: '/sounds/ready.mp3',
-    start: '/sounds/start.mp3',
-    stop: '/sounds/stop.mp3',
-    vote: '/sounds/vote.mp3',
-    valid: '/sounds/valid.mp3',
-    invalid: '/sounds/invalid.mp3',
-    win: '/sounds/win.mp3',
-    round_end: '/sounds/round_end.mp3',
-    tick: '/sounds/tick.mp3',
-    danger: '/sounds/danger.mp3',
-  };
+/**
+ * Utilitário profissional de áudio para o Bora Stop
+ * Gerencia efeitos sonoros e música de fundo
+ */
 
-  preload() {
+class AudioEngine {
+  private static instance: AudioEngine;
+  private sounds: Map<string, HTMLAudioElement> = new Map();
+  private enabled: boolean = true;
+
+  private constructor() {
+    if (typeof window !== 'undefined') {
+      // Pré-carregar sons comuns
+      this.loadSound('stop', '/sounds/stop.mp3');
+      this.loadSound('tick', '/sounds/tick.mp3');
+      this.loadSound('success', '/sounds/success.mp3');
+      this.loadSound('join', '/sounds/join.mp3');
+    }
+  }
+
+  public static getInstance(): AudioEngine {
+    if (!AudioEngine.instance) {
+      AudioEngine.instance = new AudioEngine();
+    }
+    return AudioEngine.instance;
+  }
+
+  public loadSound(name: string, url: string) {
     if (typeof window === 'undefined') return;
+    const audio = new Audio(url);
+    audio.preload = 'auto';
+    this.sounds.set(name, audio);
+  }
+
+  public play(name: string, volume: number = 0.5) {
+    if (!this.enabled || typeof window === 'undefined') return;
     
-    Object.entries(this.soundUrls).forEach(([key, url]) => {
-      const audio = new Audio(url);
-      audio.preload = 'auto';
-      this.sounds[key] = audio;
-    });
-  }
-
-  play(soundName: keyof typeof this.soundUrls, options?: { loop?: boolean; volume?: number }) {
-    if (this.muted || typeof window === 'undefined') return;
-
-    const sound = this.sounds[soundName];
+    const sound = this.sounds.get(name);
     if (sound) {
-      // Clone the node so we can play overlapping sounds of the same type
-      const clone = sound.cloneNode() as HTMLAudioElement;
-      clone.volume = (options?.volume ?? 1) * this.masterVolume;
-      clone.loop = options?.loop || false;
-      clone.play().catch(e => console.warn('Audio play failed (browser policy):', e));
-      return clone;
+      sound.volume = volume;
+      sound.currentTime = 0;
+      sound.play().catch(e => console.warn("Audio play failed:", e));
     }
   }
 
-  stop(audioInstance?: HTMLAudioElement) {
-    if (audioInstance) {
-      audioInstance.pause();
-      audioInstance.currentTime = 0;
-    }
-  }
-
-  setMute(mute: boolean) {
-    this.muted = mute;
-  }
-
-  toggleMute() {
-    this.muted = !this.muted;
-    return this.muted;
-  }
-
-  setVolume(volume: number) {
-    this.masterVolume = Math.max(0, Math.min(1, volume));
+  public setEnabled(enabled: boolean) {
+    this.enabled = enabled;
   }
 }
 
-export const audioSystem = new AudioSystem();
+export const audio = typeof window !== 'undefined' ? AudioEngine.getInstance() : null;
