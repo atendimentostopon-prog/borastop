@@ -1,111 +1,113 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
-@layer base {
-  :root {
-    --background: 240 10% 3.9%;
-    --foreground: 0 0% 98%;
-    --brand-purple: #A855F7;
-    --brand-blue: #00C2FF;
-    --brand-green: #22C55E;
-    --brand-yellow: #FFD700;
-    --brand-card: #0F1115;
+@theme {
+  --color-brand-purple: #A855F7;
+  --color-brand-purple-dark: #4A0E4E;
+  --color-brand-blue: #00D4FF;
+  --color-brand-blue-dark: #0066CC;
+  --color-brand-yellow: #FFD700;
+  --color-brand-green: #39FF14;
+  --color-brand-card: rgba(15, 17, 26, 0.8);
+  --color-brand-bg: #05060B;
+  
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Base Styles */
+body {
+  background-color: var(--color-brand-bg);
+  color: white;
+  overflow-x: hidden;
+  font-family: var(--font-sans);
+}
+
+/* Component Utilities */
+@utility game-card {
+  background-color: var(--color-brand-card);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 2.5rem;
+  padding: 1.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+@utility neon-text {
+  text-shadow: 0 0 10px rgba(168, 85, 247, 0.6), 0 0 20px rgba(168, 85, 247, 0.4);
+}
+
+@utility neon-text-blue {
+  text-shadow: 0 0 10px rgba(0, 212, 255, 0.6), 0 0 20px rgba(0, 212, 255, 0.4);
+}
+
+@utility input-game {
+  background-color: rgba(0, 0, 0, 0.4);
+  border-width: 2px;
+  border-color: rgba(255, 255, 255, 0.05);
+  border-radius: 1.5rem;
+  padding: 1rem 1.5rem;
+  font-weight: 900;
+  font-style: italic;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  outline: none;
+  transition: all 0.2s;
+  
+  &:focus {
+    border-color: var(--color-brand-purple);
+    box-shadow: 0 0 0 4px rgba(168, 85, 247, 0.1);
+  }
+  
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.1);
   }
 }
 
-body {
-  background-color: #030406;
-  color: white;
-  font-family: 'Inter', sans-serif;
-  overflow-x: hidden;
-}
-
-/* Custom Scrollbar AAA */
-.custom-scrollbar::-webkit-scrollbar {
-  width: 6px;
-}
-.custom-scrollbar::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.02);
-}
-.custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(168, 85, 247, 0.2);
-  border-radius: 10px;
-}
-.custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(168, 85, 247, 0.4);
-}
-
-/* Neon Text & Utilities */
-.neon-text {
-  text-shadow: 0 0 20px rgba(168, 85, 247, 0.5);
-}
-
-.bg-game-grid {
-  background-image: 
-    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-.game-card {
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
-}
-
-.game-button {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  text-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
-  box-shadow: 0 4px 0 rgba(0, 0, 0, 0.2);
-}
-
-.game-button:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3), 0 6px 0 rgba(0, 0, 0, 0.1);
-}
-
-.game-button:active {
-  transform: translateY(2px);
-  box-shadow: 0 0 0 transparent;
-}
-
-/* Glassmorphism Classes */
-.glass-panel {
-  background: rgba(15, 17, 21, 0.8);
-  backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-/* Input Game Styles */
-.input-game {
-  background: rgba(255, 255, 255, 0.03);
-  border: 2px solid rgba(255, 255, 255, 0.05);
-  border-radius: 1.5rem;
-  color: white;
-  transition: all 0.3s ease;
-  outline: none;
-}
-
-.input-game:focus {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: #A855F7;
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
-}
-
 /* Animations */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-15px); }
+}
+
+.animate-float {
+  animation: float 5s ease-in-out infinite;
+}
+
 @keyframes pulse-soft {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+  0%, 100% { opacity: 0.3; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.1); }
 }
 
 .animate-pulse-soft {
-  animation: pulse-soft 3s infinite;
+  animation: pulse-soft 8s ease-in-out infinite;
 }
 
-/* Scrollbar Hide Utility */
-.scrollbar-hide::-webkit-scrollbar {
+/* Background Grid */
+.bg-game-grid {
+  background-image: 
+    linear-gradient(rgba(168, 85, 247, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(168, 85, 247, 0.05) 1px, transparent 1px);
+  background-size: 60px 60px;
+}
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(168, 85, 247, 0.2);
+  border-radius: 10px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(168, 85, 247, 0.4);
+}
+
+.no-scrollbar::-webkit-scrollbar {
   display: none;
 }
-.scrollbar-hide {
+.no-scrollbar {
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
