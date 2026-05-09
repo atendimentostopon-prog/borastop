@@ -51,7 +51,6 @@ export default function ResultsPage({ params }: { params: Promise<{ code: string
           const valid = pAnswers.filter(a => a.is_valid && a.points === 10).length;
           const repeated = pAnswers.filter(a => a.is_valid && a.points === 5).length;
           const invalid = pAnswers.filter(a => a.is_valid === false).length;
-          // We don't have direct 'stops' count unless we track it. But we can omit if not possible.
           return {
             id: p.id,
             name: p.nickname,
