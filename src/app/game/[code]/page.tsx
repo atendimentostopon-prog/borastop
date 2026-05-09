@@ -3,13 +3,12 @@
 import { use, useEffect, useState, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { ThumbsUp, ThumbsDown, AlertCircle, CheckCircle, Zap, Timer, Trophy, MessageSquare, Info, Rocket, Sparkles, X } from "lucide-react";
+import { ThumbsUp, ThumbsDown, AlertCircle, CheckCircle, Zap, Timer, Trophy, MessageSquare, Info, Rocket, Sparkles, X, Hash } from "lucide-react";
 import CategoryInput from "@/components/game/CategoryInput";
 import Scoreboard from "@/components/game/Scoreboard";
 import TimerBar from "@/components/game/TimerBar";
 import ChatBox from "@/components/game/ChatBox";
-import Button from "@/components/ui/Button";
-import PageContainer from "@/components/layout/PageContainer";
+import GameButton from "@/components/game/GameButton";
 import LetterIntro from "@/components/ui/LetterIntro";
 import ValidationConfirmStatus from "@/components/game/ValidationConfirmStatus";
 import { supabase } from "@/lib/supabase/client";
@@ -59,7 +58,6 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
   const roundRef = useRef<any>(null);
   const myPidRef = useRef<string | null>(null);
   const categoriesRef = useRef<any[]>([]);
-  const playersRef = useRef<Player[]>([]);
   const finishingRef = useRef(false);
   const finalizingRef = useRef(false);
   const chanRef = useRef<any>(null);
@@ -120,7 +118,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, p => {
         const newMsg = p.new as any;
-        setMessages(prev => [...prev, { id: newMsg.id, playerId: m.player_id, playerName: m.nickname, text: m.message, isSystem: m.is_system }]);
+        setMessages(prev => [...prev, { id: newMsg.id, playerId: newMsg.player_id, playerName: newMsg.nickname, text: newMsg.message, isSystem: newMsg.is_system }]);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'validation_votes' }, p => {
         if (p.eventType === 'DELETE') return;
@@ -208,6 +206,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
   const stopRound = async () => {
     const r = roundRef.current;
     if (!r || r.status !== 'playing') return;
+    audioSystem.play('stop');
     await db.from('rounds').update({ status: 'reviewing', ended_at: new Date().toISOString(), validation_category_index: 0, validation_started_at: new Date().toISOString() }).eq('id', r.id);
     await db.from('rooms').update({ status: 'voting' }).eq('id', room?.id);
   };
@@ -270,8 +269,9 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
     await db.from('messages').insert({ room_id: room.id, player_id: myPid, nickname: myNickname, message: text.trim(), is_system: false });
   };
 
-  if (loading || !room || !round) return <PageContainer className="flex items-center justify-center min-h-[70vh]"><div className="w-16 h-16 border-4 border-brand-blue/30 border-t-brand-blue rounded-full animate-spin" /></PageContainer>;
+  if (loading || !room || !round) return <div className="flex items-center justify-center h-full"><div className="w-16 h-16 border-4 border-brand-blue/30 border-t-brand-blue rounded-full animate-spin" /></div>;
 
+  const amIHost = room.host_nickname === myNickname;
   const isReviewing = round.status === 'reviewing';
   const isFinished = round.status === 'finished';
   const currentCat = categories[round.validation_category_index ?? 0];
@@ -279,59 +279,92 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
   const confirmedIds = currentCat ? getConfirmedPlayerIds(confirms, round.id, currentCat.id) : [];
 
   return (
-    <PageContainer className="relative overflow-hidden">
-      <div className="absolute inset-0 bg-game-grid opacity-5 pointer-events-none" />
+    <div className="flex-1 flex flex-col h-full overflow-hidden relative">
       
+      {/* Intro Overlay */}
       {round.status === 'playing' && introPhase === 'intro' && !hasShownIntro && (
-        <LetterIntro letter={round.letter} onComplete={() => { setIntroPhase('playing'); setHasShownIntro(true); }} />
+        <div className="absolute inset-0 z-[100] bg-[#05060B]/95 backdrop-blur-2xl">
+          <LetterIntro letter={round.letter} onComplete={() => { setIntroPhase('playing'); setHasShownIntro(true); }} />
+        </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative z-10">
+      {/* Game Header Area */}
+      <div className="p-8 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-6">
+          <div className="w-16 h-16 bg-brand-purple/10 rounded-[1.5rem] border border-brand-purple/20 flex items-center justify-center text-brand-purple shadow-inner">
+            <span className="text-4xl font-black italic tracking-tighter">{round.letter}</span>
+          </div>
+          <div>
+            <h1 className="text-2xl font-black uppercase italic tracking-tighter text-white">
+              Rodada {room.current_round} de {room.total_rounds}
+            </h1>
+            <div className="flex items-center gap-3 mt-1">
+               <span className="text-[10px] text-brand-yellow font-black uppercase tracking-[0.2em] flex items-center gap-2">
+                 <Timer size={10} /> {isReviewing ? 'Fase de Avaliação' : 'Em Combate'}
+               </span>
+               <span className="w-1 h-1 bg-white/10 rounded-full" />
+               <span className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">Sala: {room.name}</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-6">
+           {round.status === 'playing' && (
+             <div className="flex flex-col items-end">
+                <span className="text-[10px] font-black uppercase tracking-widest text-white/20 mb-1">Tempo Restante</span>
+                <span className={`text-4xl font-black italic tabular-nums leading-none ${timeLeft < 10 ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+                  {timeLeft}s
+                </span>
+             </div>
+           )}
+           <div className="w-px h-12 bg-white/5 hidden md:block" />
+           <div className="hidden md:flex flex-col items-center">
+             <Trophy size={24} className="text-brand-yellow mb-1" />
+             <span className="text-[10px] font-black text-white/30 uppercase tracking-widest">RANKING</span>
+           </div>
+        </div>
+      </div>
+
+      {/* Game Main View */}
+      <div className="flex-1 overflow-hidden p-8 flex gap-8">
         
-        {/* Main Column */}
-        <div className="lg:col-span-9 flex flex-col gap-6">
-          
+        {/* Play/Review Area */}
+        <div className="flex-1 h-full overflow-y-auto no-scrollbar pb-32">
           <AnimatePresence mode="wait">
             {!isReviewing && !isFinished && introPhase === 'playing' && (
-              <motion.div key="play" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="game-card p-8 flex flex-col gap-8 bg-brand-card/20 backdrop-blur-2xl border-white/10 border-2 rounded-[3rem] shadow-2xl">
-                <div className="flex justify-between items-center border-b border-white/5 pb-6">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue border border-brand-blue/20">
-                      <Rocket size={24} />
-                    </div>
-                    <div>
-                      <h2 className="text-2xl font-black uppercase italic tracking-tighter">Rodada {room.current_round} de {room.total_rounds}</h2>
-                      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/30 italic">Arena de Batalha em Curso</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] font-black uppercase tracking-widest text-white/20 block mb-1">Letra Atual</span>
-                    <span className="text-4xl font-black text-brand-yellow drop-shadow-[0_0_10px_rgba(255,215,0,0.3)]">{round.letter}</span>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <motion.div key="play" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9 }} className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {categories.map((cat, idx) => (
-                    <CategoryInput 
-                      key={cat.id} category={cat.name} value={localAns[cat.id] || ""}
-                      onChange={e => setLocalAns(prev => ({ ...prev, [cat.id]: e.target.value }))}
-                      autoFocus={idx === 0}
-                    />
+                    <div key={cat.id} className="relative group">
+                      <div className="absolute -top-2 left-4 px-2 py-0.5 bg-brand-purple rounded-lg z-10 border border-brand-yellow/30 shadow-lg">
+                        <span className="text-[9px] font-black uppercase italic tracking-widest text-white">{cat.name}</span>
+                      </div>
+                      <input 
+                        type="text"
+                        value={localAns[cat.id] || ""}
+                        onChange={e => setLocalAns(prev => ({ ...prev, [cat.id]: e.target.value }))}
+                        placeholder={`Digite aqui...`}
+                        className="w-full bg-white/[0.03] hover:bg-white/[0.05] border-2 border-white/5 focus:border-brand-purple rounded-[1.5rem] px-6 py-6 font-black text-xl text-white outline-none transition-all placeholder:text-white/5 uppercase italic"
+                        autoFocus={idx === 0}
+                      />
+                    </div>
                   ))}
                 </div>
 
-                <div className="flex items-center gap-6 pt-6 mt-4 border-t border-white/5">
-                  <div className="flex-1 bg-black/40 rounded-3xl p-6 border border-white/5 shadow-inner">
+                <div className="flex items-center gap-6 pt-8 mt-8 border-t border-white/5">
+                  <div className="flex-1 bg-black/40 rounded-3xl p-6 border border-white/5">
                     <div className="flex justify-between mb-3 px-2">
-                      <span className="text-[10px] font-black uppercase tracking-widest text-white/30 flex items-center gap-2"><Timer size={14} /> Cronômetro de Pressão</span>
-                      <span className={`text-xl font-black italic ${timeLeft < 10 ? 'text-red-500 animate-pulse' : 'text-white/80'}`}>{timeLeft}s</span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-white/20">Progresso da Rodada</span>
+                      <span className="text-[9px] font-black uppercase tracking-[0.2em] text-brand-blue italic">{Math.round((timeLeft/room.round_time)*100)}%</span>
                     </div>
                     <TimerBar timeRemaining={timeLeft} totalTime={room.round_time} />
                   </div>
+                  
                   <motion.button 
-                    whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                    onClick={stopRound} 
-                    className="game-button h-[100px] w-[200px] !bg-red-600 !border-red-400 text-white text-4xl font-black italic tracking-tighter shadow-[0_0_40px_rgba(220,38,38,0.4)]"
+                    whileHover={{ scale: 1.05 }} 
+                    whileTap={{ scale: 0.95 }}
+                    onClick={stopRound}
+                    className="h-28 px-12 bg-red-600 hover:bg-red-500 rounded-[2rem] text-white font-black italic text-5xl tracking-tighter shadow-[0_0_50px_rgba(220,38,38,0.4)] border-b-8 border-red-800 transition-all active:border-b-0 active:translate-y-2 uppercase"
                   >
                     STOP!
                   </motion.button>
@@ -340,42 +373,51 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
             )}
 
             {isReviewing && currentCat && (
-              <motion.div key="review" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} className="game-card p-10 flex flex-col gap-8 rounded-[3rem] border border-white/10 bg-brand-card/30 backdrop-blur-3xl shadow-2xl">
-                <div className="flex flex-col items-center text-center">
-                  <div className="bg-brand-yellow/10 border border-brand-yellow/20 px-6 py-2 rounded-full mb-4">
-                    <span className="text-xs font-black uppercase italic tracking-widest text-brand-yellow">Fase de Avaliação • {round.validation_category_index! + 1}/{categories.length}</span>
+              <motion.div key="review" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="space-y-8 h-full flex flex-col">
+                <div className="flex flex-col items-center text-center bg-white/[0.02] p-8 rounded-[3rem] border border-white/5 shadow-2xl">
+                  <div className="bg-brand-yellow/10 border border-brand-yellow/20 px-6 py-1.5 rounded-full mb-4">
+                    <span className="text-[10px] font-black uppercase italic tracking-[0.2em] text-brand-yellow">
+                      Avaliando: {currentCat.name} • {round.validation_category_index! + 1}/{categories.length}
+                    </span>
                   </div>
-                  <h1 className="text-6xl font-black uppercase italic tracking-tighter neon-text mb-2">{currentCat.name}</h1>
-                  <p className="text-white/40 font-bold uppercase text-[10px] tracking-[0.4em]">Validação Coletiva da Arena</p>
+                  <h2 className="text-6xl font-black uppercase italic tracking-tighter text-white drop-shadow-[0_0_20px_rgba(255,255,255,0.1)]">
+                    O que disseram?
+                  </h2>
                 </div>
 
-                <div className="w-full bg-black/30 p-6 rounded-[2rem] border border-white/5">
-                   <div className="flex justify-between mb-2">
-                     <span className="text-[10px] font-black uppercase tracking-widest text-white/20">Tempo Restante para Avaliar</span>
-                     <span className="text-brand-yellow font-black italic">{valTimeLeft}s</span>
-                   </div>
-                   <TimerBar timeRemaining={valTimeLeft} totalTime={VALIDATION_SECS} />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                <div className="flex-1 overflow-y-auto pr-2 space-y-4 no-scrollbar">
                   {groupAnswersByCategory(answers, players, currentCat.id).map(g => {
                     const { validVotes, invalidVotes } = getVotesForAnswerGroup({ votes, roundId: round.id, categoryId: currentCat.id, normalizedAnswer: g.normalizedAnswer });
                     const myVote = votes.find(v => v.normalized_answer === g.normalizedAnswer && v.voter_id === myPid && v.category_id === currentCat.id)?.vote;
                     const auto = autoValidateAnswer({ answer: g.displayAnswer, categoryName: currentCat.name, letter: round.letter });
+                    
                     return (
-                      <motion.div key={g.normalizedAnswer} layout className="bg-white/5 border border-white/10 rounded-[2rem] p-6 flex items-center justify-between group hover:bg-white/[0.08] transition-all">
+                      <motion.div key={g.normalizedAnswer} layout className="bg-white/[0.03] border border-white/5 rounded-[2rem] p-6 flex items-center justify-between group">
                         <div className="flex flex-col">
-                          <div className="flex items-center gap-3">
-                            <span className="text-3xl font-black italic uppercase tracking-tight text-white">{g.displayAnswer}</span>
-                            {auto.suggestedValid === false && <div className="text-red-500 bg-red-500/10 p-1.5 rounded-lg border border-red-500/20" title={auto.reason}><AlertCircle size={16} /></div>}
-                          </div>
-                          <span className="text-[10px] font-black uppercase tracking-widest text-white/20 mt-1">Guerreiro(s): {g.playerNames.join(", ")}</span>
+                           <div className="flex items-center gap-3">
+                             <span className="text-3xl font-black italic uppercase text-white leading-none">{g.displayAnswer}</span>
+                             {auto.suggestedValid === false && (
+                               <div className="bg-red-500/10 border border-red-500/20 p-2 rounded-xl text-red-500" title={auto.reason}>
+                                 <AlertCircle size={14} />
+                               </div>
+                             )}
+                           </div>
+                           <span className="text-[9px] font-black uppercase text-white/20 mt-2 italic tracking-widest">Jogadores: {g.playerNames.join(", ")}</span>
                         </div>
-                        <div className="flex bg-black/40 p-2 rounded-2xl border border-white/5 gap-2">
-                          <button onClick={() => handleVote(g.normalizedAnswer, currentCat.id, 'valid')} disabled={!!myConfirm} className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black italic transition-all ${myVote === 'valid' ? 'bg-brand-green text-black shadow-lg shadow-brand-green/30 scale-105' : 'text-white/40 hover:text-white'}`}>
+                        
+                        <div className="flex gap-2 bg-black/40 p-2 rounded-2xl">
+                          <button 
+                            onClick={() => handleVote(g.normalizedAnswer, currentCat.id, 'valid')}
+                            disabled={!!myConfirm}
+                            className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black italic transition-all ${myVote === 'valid' ? 'bg-brand-green text-black' : 'text-white/20 hover:text-white/40'}`}
+                          >
                             <ThumbsUp size={18} /> {validVotes}
                           </button>
-                          <button onClick={() => handleVote(g.normalizedAnswer, currentCat.id, 'invalid')} disabled={!!myConfirm} className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black italic transition-all ${myVote === 'invalid' ? 'bg-red-500 text-white shadow-lg shadow-red-500/30 scale-105' : 'text-white/40 hover:text-white'}`}>
+                          <button 
+                            onClick={() => handleVote(g.normalizedAnswer, currentCat.id, 'invalid')}
+                            disabled={!!myConfirm}
+                            className={`flex items-center gap-3 px-6 py-3 rounded-xl font-black italic transition-all ${myVote === 'invalid' ? 'bg-red-500 text-white' : 'text-white/20 hover:text-white/40'}`}
+                          >
                             <ThumbsDown size={18} /> {invalidVotes}
                           </button>
                         </div>
@@ -384,63 +426,75 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
                   })}
                 </div>
 
-                <div className="pt-6 border-t border-white/5 flex flex-col gap-6">
-                   <ValidationConfirmStatus confirmedPlayerIds={confirmedIds} players={players} hasConfirmed={!!myConfirm} />
-                   <Button onClick={handleConfirm} disabled={!!myConfirm} className="game-button h-20 text-2xl font-black italic tracking-widest" fullWidth>
-                     {myConfirm ? 'VOTO COMPUTADO' : 'CONFIRMAR VEREDITO'}
-                     {myConfirm ? <CheckCircle size={24} className="ml-4 text-brand-green" /> : <Rocket size={24} className="ml-4" />}
-                   </Button>
+                <div className="bg-[#1A1C26] p-6 rounded-[2.5rem] border border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
+                  <div className="flex-1 w-full">
+                    <ValidationConfirmStatus confirmedPlayerIds={confirmedIds} players={players} hasConfirmed={!!myConfirm} />
+                  </div>
+                  <GameButton 
+                    title={myConfirm ? "AGUARDANDO..." : "CONFIRMAR VOTOS"}
+                    subtitle={myConfirm ? "Sua parte está feita" : "Finalizar avaliação"}
+                    icon={myConfirm ? CheckCircle : Rocket}
+                    variant={myConfirm ? "secondary" : "primary"}
+                    onClick={handleConfirm}
+                    disabled={!!myConfirm}
+                    className="w-full md:w-80 h-20 rounded-2xl"
+                  />
                 </div>
               </motion.div>
             )}
 
             {isFinished && (
-              <motion.div key="finish" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card p-16 text-center flex flex-col items-center gap-8 shadow-[0_0_80px_rgba(34,197,94,0.15)] rounded-[3rem] border border-brand-green/20 bg-brand-card/20 backdrop-blur-3xl">
-                <div className="w-24 h-24 bg-brand-green/10 rounded-[2.5rem] border-2 border-brand-green/30 flex items-center justify-center text-brand-green mb-4">
-                  <Trophy size={50} />
-                </div>
-                <div>
-                  <h1 className="text-6xl font-black uppercase italic tracking-tighter text-brand-green mb-2">Rodada Finalizada!</h1>
-                  <p className="text-white/40 font-bold uppercase text-xs tracking-[0.5em]">Aguardando o Comando do Host</p>
-                </div>
-                {room.host_nickname === myNickname ? (
-                  <Button onClick={startNextRound} className="game-button h-24 w-full max-w-md text-3xl font-black italic tracking-widest" variant="primary">
-                    {room.current_round >= room.total_rounds ? 'VER RANKING FINAL' : 'PRÓXIMA BATALHA'}
-                    <Sparkles size={30} className="ml-6" />
-                  </Button>
-                ) : (
-                  <div className="bg-brand-yellow/5 border border-brand-yellow/20 p-6 rounded-3xl w-full max-w-md">
-                    <p className="text-brand-yellow font-black italic animate-pulse tracking-wider">O HOST ESTÁ PREPARANDO A PRÓXIMA ARENA...</p>
-                  </div>
-                )}
+              <motion.div key="finish" initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="h-full flex flex-col items-center justify-center text-center gap-8">
+                 <div className="w-32 h-32 bg-brand-green/10 rounded-[3rem] border-2 border-brand-green/30 flex items-center justify-center text-brand-green mb-4 shadow-[0_0_50px_rgba(34,197,94,0.2)]">
+                   <Trophy size={64} />
+                 </div>
+                 <div>
+                    <h2 className="text-6xl font-black uppercase italic tracking-tighter text-white mb-2">Fim da Rodada!</h2>
+                    <p className="text-white/40 font-bold uppercase text-[10px] tracking-[0.4em]">O destino foi traçado</p>
+                 </div>
+                 
+                 {amIHost ? (
+                    <GameButton 
+                      title={room.current_round >= room.total_rounds ? "RESULTADO FINAL" : "PRÓXIMA RODADA"}
+                      subtitle="Continuar a jornada"
+                      icon={Sparkles}
+                      variant="accent"
+                      onClick={startNextRound}
+                      className="w-80 h-24 rounded-[2rem]"
+                    />
+                 ) : (
+                    <div className="bg-brand-yellow/5 border border-brand-yellow/20 px-8 py-4 rounded-full">
+                      <span className="text-brand-yellow font-black uppercase italic tracking-widest animate-pulse">Aguardando o Host...</span>
+                    </div>
+                 )}
               </motion.div>
             )}
           </AnimatePresence>
         </div>
 
         {/* Sidebar */}
-        <div className="lg:col-span-3 flex flex-col gap-6 lg:h-[calc(100vh-140px)]">
-          <div className="bg-brand-card/20 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-8 flex flex-col gap-6 shadow-2xl overflow-hidden shrink-0">
-             <div className="flex items-center gap-3 border-b border-white/5 pb-4">
-               <Trophy className="text-brand-yellow" size={20} />
-               <h3 className="text-lg font-black uppercase italic tracking-tighter text-white/80">Placar Geral</h3>
-             </div>
-             <div className="max-h-[300px] overflow-y-auto scrollbar-hide flex flex-col gap-3">
-               {players.sort((a,b) => (b.score||0)-(a.score||0)).map((p, idx) => (
-                 <div key={p.id} className="flex items-center justify-between bg-white/5 p-4 rounded-2xl border border-white/5 hover:bg-white/10 transition-colors group">
+        <div className="hidden lg:flex w-80 flex-col gap-6 h-full">
+           <div className="game-card p-6 border-white/5 bg-white/[0.01] flex flex-col h-[350px]">
+              <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
+                 <Trophy size={18} className="text-brand-yellow" />
+                 <h3 className="text-lg font-black uppercase italic text-white/80">Placar Atual</h3>
+              </div>
+              <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
+                {players.sort((a,b) => (b.score||0)-(a.score||0)).map((p, idx) => (
+                  <div key={p.id} className="bg-white/5 p-3 rounded-2xl flex items-center justify-between border border-white/5">
                     <div className="flex items-center gap-3">
-                      <span className={`text-sm font-black italic ${idx < 3 ? 'text-brand-yellow' : 'text-white/20'}`}>#{idx+1}</span>
-                      <span className="font-black italic uppercase text-xs text-white/90">{p.name}</span>
+                      <span className={`text-[10px] font-black italic ${idx < 3 ? 'text-brand-yellow' : 'text-white/20'}`}>#{idx+1}</span>
+                      <span className="text-xs font-black uppercase text-white/80 italic">{p.name}</span>
                     </div>
-                    <span className="font-black italic text-brand-blue drop-shadow-[0_0_10px_rgba(6,182,212,0.3)]">{p.score || 0}</span>
-                 </div>
-               ))}
-             </div>
-          </div>
+                    <span className="text-xs font-black text-brand-blue">{p.score || 0}</span>
+                  </div>
+                ))}
+              </div>
+           </div>
 
-          <ChatBox messages={messages} onSendMessage={handleSendMessage} className="flex-1 bg-brand-card/10!" />
+           <ChatBox messages={messages} onSendMessage={handleSendMessage} className="flex-1 min-h-[300px]" />
         </div>
       </div>
-    </PageContainer>
+    </div>
   );
 }
