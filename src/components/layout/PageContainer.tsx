@@ -1,19 +1,28 @@
-import { ReactNode } from "react";
-import PageTransition from "@/components/animations/PageTransition";
-import FloatingLetters from "@/components/animations/FloatingLetters";
+import React from 'react';
+import { cn } from '@/lib/utils';
+import Header from './Header';
+import Footer from './Footer';
 
 interface PageContainerProps {
-  children: ReactNode;
+  children: React.ReactNode;
   className?: string;
+  withHeader?: boolean;
+  withFooter?: boolean;
 }
 
-export default function PageContainer({ children, className = "" }: PageContainerProps) {
+export default function PageContainer({ 
+  children, 
+  className,
+  withHeader = true,
+  withFooter = true
+}: PageContainerProps) {
   return (
-    <>
-      <FloatingLetters />
-      <PageTransition className={`w-full max-w-7xl mx-auto px-4 py-8 md:py-12 ${className}`}>
+    <div className="min-h-screen bg-brand-bg text-white flex flex-col">
+      {withHeader && <Header />}
+      <main className={cn("flex-grow p-6 md:p-10", className)}>
         {children}
-      </PageTransition>
-    </>
+      </main>
+      {withFooter && <Footer />}
+    </div>
   );
 }

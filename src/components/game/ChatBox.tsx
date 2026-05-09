@@ -70,7 +70,7 @@ export default function ChatBox({ messages, onSendMessage, className = "" }: Cha
                         <span className="text-xs text-white/40 italic bg-white/5 px-3 py-1 rounded-full">{msg.text}</span>
                       ) : (
                         <div className="flex flex-col max-w-[90%]">
-                          <span className="text-xs text-white/50 ml-2 mb-1">{msg.playerName}</span>
+                          <span className="text-xs text-white/50 ml-2 mb-1">{msg.sender}</span>
                           <div className="bg-white/10 px-3 py-2 rounded-2xl rounded-tl-sm text-sm">{msg.text}</div>
                         </div>
                       )}

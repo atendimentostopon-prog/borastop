@@ -1,93 +1,105 @@
 'use client';
 
-import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import GameLogo from "@/components/game/GameLogo";
-import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
-import Input from "@/components/ui/Input";
-import PageContainer from "@/components/layout/PageContainer";
-import AdPlaceholder from "@/components/game/AdPlaceholder";
-import AnimatedCard from "@/components/animations/AnimatedCard";
-import PulseGlow from "@/components/animations/PulseGlow";
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { motion } from 'framer-motion';
+import Button from '@/components/ui/Button';
+import Card from '@/components/ui/Card';
+import Input from '@/components/ui/Input';
+import Header from '@/components/layout/Header';
+import Footer from '@/components/layout/Footer';
+import FloatingLetters from '@/components/animations/FloatingLetters';
+import GameLogo from '@/components/game/GameLogo';
+import PageTransition from '@/components/animations/PageTransition';
 
 export default function Home() {
-  const router = useRouter();
-  const [nickname, setNickname] = useState("");
-  const [error, setError] = useState("");
+  const [roomCode, setRoomCode] = useState('');
+  const [nickname, setNickname] = useState('');
 
   useEffect(() => {
-    const saved = localStorage.getItem("bora_stop_nickname");
+    const saved = localStorage.getItem('stopon_nickname');
     if (saved) setNickname(saved);
   }, []);
 
-  const handleAction = (path: string) => {
-    if (!nickname.trim()) {
-      setError("Por favor, digite um apelido antes de jogar.");
-      return;
-    }
-    localStorage.setItem("bora_stop_nickname", nickname.trim());
-    router.push(path);
+  const handleSaveNickname = (val: string) => {
+    setNickname(val);
+    localStorage.setItem('stopon_nickname', val);
   };
 
   return (
-    <PageContainer className="flex flex-col items-center justify-center min-h-[80vh] gap-12">
-      <div className="text-center flex flex-col items-center gap-4">
-        <GameLogo size="lg" />
-        <p className="text-xl md:text-2xl font-bold text-white/80 max-w-lg mt-4">
-          Jogue Stop online com seus amigos
-        </p>
-      </div>
+    <PageTransition>
+      <div className="min-h-screen bg-brand-bg text-white relative overflow-hidden flex flex-col">
+        <FloatingLetters />
+        
+        <Header />
 
-      <div className="w-full max-w-md flex flex-col gap-6">
-        <AnimatedCard hoverScale>
-          <Card className="flex flex-col gap-6">
-            <Input 
-              placeholder="Digite seu apelido..." 
-              className="text-center text-xl font-bold"
-              value={nickname}
-              onChange={(e) => {
-                setNickname(e.target.value);
-                setError("");
-              }}
-              error={error}
-            />
-            
-            <div className="flex flex-col gap-4">
-              <PulseGlow color="brand-yellow">
-                <Button size="lg" fullWidth onClick={() => handleAction("/rooms")}>
-                  Jogar Agora
-                </Button>
-              </PulseGlow>
-              
-              <div className="grid grid-cols-2 gap-4">
-                <Button variant="secondary" fullWidth onClick={() => handleAction("/create-room")}>
-                  Criar Sala
-                </Button>
-                <Button variant="secondary" fullWidth onClick={() => handleAction("/rooms")}>
-                  Entrar em Sala
-                </Button>
-              </div>
+        <main className="flex-grow flex flex-col items-center justify-center p-6 z-10">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.5, type: 'spring' }}
+            className="w-full max-w-md"
+          >
+            <div className="flex justify-center mb-8">
+              <GameLogo size="lg" />
             </div>
-          </Card>
-        </AnimatedCard>
 
-        <AnimatedCard delay={0.2}>
-          <Card className="bg-brand-purple/20 border-brand-purple/50">
-            <h3 className="font-bold text-lg mb-2 text-brand-yellow">Como Jogar</h3>
-            <ol className="list-decimal list-inside space-y-2 text-sm text-white/80">
-              <li>Escolha um apelido e crie ou entre em uma sala.</li>
-              <li>Uma letra será sorteada no início de cada rodada.</li>
-              <li>Preencha as categorias com palavras que comecem com a letra.</li>
-              <li>O primeiro a terminar clica em STOP!</li>
-              <li>Todos validam as respostas e ganham pontos.</li>
-            </ol>
-          </Card>
-        </AnimatedCard>
+            <Card className="p-8 shadow-2xl border-white/20 backdrop-blur-xl">
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-brand-yellow uppercase tracking-wider">Como quer ser chamado?</label>
+                  <Input 
+                    placeholder="Seu apelido..." 
+                    value={nickname}
+                    onChange={(e) => handleSaveNickname(e.target.value)}
+                    maxLength={15}
+                  />
+                </div>
 
-        <AdPlaceholder />
+                <div className="space-y-4 pt-2">
+                  <Link href="/create-room" className="block">
+                    <Button fullWidth size="lg" className="shadow-[0_4px_0_#4A148C] active:translate-y-1 active:shadow-none transition-all">
+                      Criar Nova Sala
+                    </Button>
+                  </Link>
+
+                  <div className="relative flex items-center justify-center py-2">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-white/10"></div>
+                    </div>
+                    <span className="relative px-4 bg-[#2D0A4E] text-white/40 text-xs font-bold uppercase tracking-widest">OU</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Input 
+                      placeholder="Código da sala" 
+                      className="flex-grow uppercase font-mono tracking-[0.2em] text-center"
+                      value={roomCode}
+                      onChange={(e) => setRoomCode(e.target.value.toUpperCase())}
+                      maxLength={6}
+                    />
+                    <Link href={`/lobby/${roomCode}`}>
+                      <Button variant="secondary" className="px-6 h-full" disabled={roomCode.length < 4}>
+                        Entrar
+                      </Button>
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            </Card>
+
+            <div className="mt-8 flex justify-center gap-4 text-xs font-bold uppercase tracking-widest text-white/40">
+              <Link href="/rooms" className="hover:text-brand-yellow transition-colors">Salas Públicas</Link>
+              <span>•</span>
+              <a href="#" className="hover:text-brand-yellow transition-colors">Como Jogar</a>
+              <span>•</span>
+              <a href="#" className="hover:text-brand-yellow transition-colors">Privacidade</a>
+            </div>
+          </motion.div>
+        </main>
+
+        <Footer />
       </div>
-    </PageContainer>
+    </PageTransition>
   );
 }

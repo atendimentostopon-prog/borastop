@@ -1,52 +1,86 @@
 'use client';
 
-import React from "react";
-import { motion } from "framer-motion";
-import type { Player } from "@/types/game";
+import React from 'react';
+import { Crown, CheckCircle2, User } from 'lucide-react';
+import { Player } from '@/types/game';
+import { cn } from '@/lib/utils';
 
 interface PlayerCardProps {
   player: Player;
+  isMe?: boolean;
   showStatus?: boolean;
 }
 
-export default function PlayerCard({ player, showStatus = true }: PlayerCardProps) {
-  // Generate random pastel color based on name length for avatar
-  const colors = ["bg-rose-500", "bg-blue-500", "bg-green-500", "bg-yellow-500", "bg-purple-500"];
-  const bgColor = colors[player.name.length % colors.length];
+export default function PlayerCard({ player, isMe = false, showStatus = true }: PlayerCardProps) {
+  const initials = player.name.charAt(0).toUpperCase();
+  
+  // Cores baseadas no nome do jogador para avatares consistentes
+  const bgColors = [
+    'bg-brand-purple',
+    'bg-brand-blue',
+    'bg-brand-green',
+    'bg-red-500',
+    'bg-pink-500',
+    'bg-orange-500'
+  ];
+  const avatarBg = bgColors[player.name.length % bgColors.length];
 
   return (
-    <motion.div 
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      transition={{ type: "spring", stiffness: 300, damping: 20 }}
-      className={`bg-black/20 border border-white/5 rounded-xl p-3 flex items-center justify-between transition-opacity ${player.isOnline === false ? 'opacity-40 grayscale' : ''}`}
-    >
-      <div className="flex items-center gap-3">
+    <div className={cn(
+      "relative group bg-brand-card/40 backdrop-blur-md rounded-2xl p-4 border transition-all duration-300",
+      isMe ? "border-brand-yellow ring-2 ring-brand-yellow/20" : "border-white/5 hover:border-white/20",
+      player.isReady ? "shadow-[0_0_20px_rgba(74,222,128,0.1)]" : ""
+    )}>
+      <div className="flex items-center gap-4">
+        {/* Avatar Section */}
         <div className="relative">
-          <div className={`w-12 h-12 rounded-full ${bgColor} flex items-center justify-center font-bold text-xl border-2 border-white/20`}>
-            {player.name.charAt(0).toUpperCase()}
+          <div className={cn(
+            "w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow-xl transform group-hover:rotate-6 transition-transform",
+            avatarBg
+          )}>
+            {initials}
           </div>
-          <div className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-black ${player.isOnline !== false ? 'bg-brand-green' : 'bg-gray-500'}`} title={player.isOnline !== false ? 'Online' : 'Offline'} />
-        </div>
-        <div className="flex flex-col">
-          <span className="font-bold">{player.name}</span>
-          {player.score !== undefined && (
-            <span className="text-sm text-brand-yellow font-bold">{player.score} pts</span>
+          
+          {player.isHost && (
+            <div className="absolute -top-2 -right-2 bg-brand-yellow p-1 rounded-lg text-brand-purple shadow-lg rotate-12">
+              <Crown size={14} fill="currentColor" />
+            </div>
+          )}
+
+          {isMe && (
+            <div className="absolute -bottom-1 -left-1 bg-brand-blue p-1 rounded-lg text-black shadow-lg">
+              <User size={10} fill="currentColor" />
+            </div>
           )}
         </div>
+
+        {/* Info Section */}
+        <div className="flex-grow min-w-0">
+          <div className="flex items-center gap-2">
+            <h3 className="font-bold text-white truncate uppercase tracking-tight">
+              {player.name} {isMe && <span className="text-white/40 italic lowercase font-medium">(você)</span>}
+            </h3>
+          </div>
+          <div className="text-xs font-black text-brand-yellow mt-0.5 uppercase tracking-widest">
+            {player.score ?? 0} Pontos
+          </div>
+        </div>
+
+        {/* Status Indicator */}
+        {showStatus && (
+          <div className={cn(
+            "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all",
+            player.isReady 
+              ? "bg-brand-green/20 border-brand-green/30 text-brand-green" 
+              : "bg-black/20 border-white/5 text-white/20"
+          )}>
+            <span className="text-[10px] font-black uppercase tracking-tighter">
+              {player.isReady ? 'PRONTO' : 'PENDENTE'}
+            </span>
+            <CheckCircle2 size={14} className={player.isReady ? 'opacity-100' : 'opacity-20'} />
+          </div>
+        )}
       </div>
-      
-      {showStatus && (
-        <motion.div 
-          animate={player.isReady ? { scale: [1, 1.1, 1], boxShadow: ["0px 0px 0px rgba(0,255,128,0)", "0px 0px 8px rgba(0,255,128,0.6)", "0px 0px 0px rgba(0,255,128,0)"] } : {}}
-          transition={player.isReady ? { repeat: Infinity, duration: 2 } : {}}
-          className={`px-3 py-1 rounded-full text-xs font-bold ${
-            player.isReady ? "bg-brand-green/20 text-brand-green border border-brand-green/30" : "bg-white/10 text-white/50"
-          }`}
-        >
-          {player.isReady ? "PRONTO" : "AGUARDANDO"}
-        </motion.div>
-      )}
-    </motion.div>
+    </div>
   );
 }

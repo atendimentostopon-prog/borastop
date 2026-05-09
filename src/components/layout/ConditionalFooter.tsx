@@ -1,11 +1,12 @@
 'use client';
-import { usePathname } from "next/navigation";
-import Footer from "@/components/layout/Footer";
+import { usePathname } from 'next/navigation';
+import Footer from './Footer';
 
 export default function ConditionalFooter() {
   const pathname = usePathname();
-  // Não mostrar footer em telas de jogo
-  const hideFooter = pathname.startsWith('/game/');
-  if (hideFooter) return null;
+  const isGamePage = pathname.includes('/game/');
+  
+  if (isGamePage) return null;
+  
   return <Footer />;
 }
