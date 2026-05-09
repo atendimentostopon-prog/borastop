@@ -188,7 +188,7 @@ export default function CreateRoomPage() {
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            className="game-card p-8 bg-brand-card/40 backdrop-blur-2xl border-white/5"
+            className="game-card p-8 bg-brand-card/40 backdrop-blur-2xl border-white/5 rounded-[2.5rem] border shadow-2xl"
           >
             <div className="flex items-center gap-3 mb-8 border-b border-white/5 pb-4">
               <div className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center text-brand-blue">
@@ -277,7 +277,7 @@ export default function CreateRoomPage() {
           </motion.div>
 
           {/* Card de Letras - Compacto e Visual */}
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="game-card p-8 bg-brand-card/40 border-white/5">
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="game-card p-8 bg-brand-card/40 border-white/5 rounded-[2.5rem] border shadow-2xl">
             <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-brand-purple/10 flex items-center justify-center text-brand-purple">
@@ -309,7 +309,7 @@ export default function CreateRoomPage() {
 
         {/* Lado Direito: Categorias e Status */}
         <div className="lg:col-span-5 space-y-8">
-          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="game-card p-8 bg-brand-card/40 border-white/5 h-full">
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }} className="game-card p-8 bg-brand-card/40 border-white/5 rounded-[2.5rem] border shadow-2xl h-full">
             <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-brand-yellow/10 flex items-center justify-center text-brand-yellow">

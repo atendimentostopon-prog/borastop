@@ -174,7 +174,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     const myPlayer = players.find(p => p.id === myPlayerId);
     if (!myPlayer) return;
     const newStatus = !myPlayer.isReady;
-    setPlayers(prev => prev.map(p => myPlayerId === p.id ? { ...p, isReady: newStatus } : p));
+    setPlayers(prev => prev.map(p => p.id === myPlayerId ? { ...p, isReady: newStatus } : p));
     await db.from('room_players').update({ is_ready: newStatus }).eq('id', myPlayerId);
   };
 
@@ -221,7 +221,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
 
   if (showPasswordModal && room) return (
     <PageContainer className="flex items-center justify-center min-h-[70vh]">
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card max-w-md p-10 text-center">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card max-w-md p-10 text-center rounded-[3rem] border bg-brand-card/20 backdrop-blur-3xl shadow-2xl">
         <Lock size={60} className="mx-auto text-brand-yellow mb-6 drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" />
         <h2 className="text-3xl font-black uppercase italic mb-2">Arena Privada</h2>
         <p className="text-white/50 text-sm mb-8">Essa partida exige uma chave de segurança.</p>
@@ -273,7 +273,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
             </div>
           </motion.div>
 
-          <div className="game-card flex-1 p-8 bg-brand-card/20 min-h-[500px]">
+          <div className="game-card flex-1 p-8 bg-brand-card/20 min-h-[500px] rounded-[3rem] border backdrop-blur-md">
             <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
               <div className="flex items-center gap-3">
                 <Users className="text-brand-blue" size={24} />
@@ -300,7 +300,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
         {/* Lado Direito: Chat & Ações */}
         <div className="lg:col-span-4 flex flex-col gap-6">
           
-          <div className="bg-brand-card/20 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-6 flex flex-col gap-4">
+          <div className="bg-brand-card/20 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-6 flex flex-col gap-4 shadow-xl">
             <div className="flex items-center gap-2 text-white/20 mb-2">
               <Info size={14} />
               <span className="text-[10px] font-black uppercase tracking-widest">Configurações Ativas</span>
