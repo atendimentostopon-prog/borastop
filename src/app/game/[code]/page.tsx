@@ -120,7 +120,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
       })
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, p => {
         const newMsg = p.new as any;
-        setMessages(prev => [...prev, { id: newMsg.id, playerId: newMsg.player_id, playerName: newMsg.nickname, text: newMsg.message, isSystem: newMsg.is_system }]);
+        setMessages(prev => [...prev, { id: newMsg.id, playerId: m.player_id, playerName: m.nickname, text: m.message, isSystem: m.is_system }]);
       })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'validation_votes' }, p => {
         if (p.eventType === 'DELETE') return;
@@ -293,7 +293,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
           
           <AnimatePresence mode="wait">
             {!isReviewing && !isFinished && introPhase === 'playing' && (
-              <motion.div key="play" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="game-card p-8 flex flex-col gap-8 bg-brand-card/20!">
+              <motion.div key="play" initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }} className="game-card p-8 flex flex-col gap-8 bg-brand-card/20 backdrop-blur-2xl border-white/10 border-2 rounded-[3rem] shadow-2xl">
                 <div className="flex justify-between items-center border-b border-white/5 pb-6">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 rounded-xl bg-brand-blue/10 flex items-center justify-center text-brand-blue border border-brand-blue/20">
@@ -331,7 +331,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
                   <motion.button 
                     whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
                     onClick={stopRound} 
-                    className="game-button h-[100px] w-[200px] bg-red-600! border-red-400! text-white text-4xl font-black italic tracking-tighter shadow-[0_0_40px_rgba(220,38,38,0.4)]"
+                    className="game-button h-[100px] w-[200px] !bg-red-600 !border-red-400 text-white text-4xl font-black italic tracking-tighter shadow-[0_0_40px_rgba(220,38,38,0.4)]"
                   >
                     STOP!
                   </motion.button>
@@ -340,7 +340,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
             )}
 
             {isReviewing && currentCat && (
-              <motion.div key="review" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} className="game-card p-10 flex flex-col gap-8">
+              <motion.div key="review" initial={{ opacity: 0, x: 50 }} animate={{ opacity: 1, x: 0 }} className="game-card p-10 flex flex-col gap-8 rounded-[3rem] border border-white/10 bg-brand-card/30 backdrop-blur-3xl shadow-2xl">
                 <div className="flex flex-col items-center text-center">
                   <div className="bg-brand-yellow/10 border border-brand-yellow/20 px-6 py-2 rounded-full mb-4">
                     <span className="text-xs font-black uppercase italic tracking-widest text-brand-yellow">Fase de Avaliação • {round.validation_category_index! + 1}/{categories.length}</span>
@@ -395,7 +395,7 @@ export default function GamePage({ params }: { params: Promise<{ code: string }>
             )}
 
             {isFinished && (
-              <motion.div key="finish" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card p-16 text-center flex flex-col items-center gap-8 shadow-[0_0_80px_rgba(34,197,94,0.15)]">
+              <motion.div key="finish" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card p-16 text-center flex flex-col items-center gap-8 shadow-[0_0_80px_rgba(34,197,94,0.15)] rounded-[3rem] border border-brand-green/20 bg-brand-card/20 backdrop-blur-3xl">
                 <div className="w-24 h-24 bg-brand-green/10 rounded-[2.5rem] border-2 border-brand-green/30 flex items-center justify-center text-brand-green mb-4">
                   <Trophy size={50} />
                 </div>
