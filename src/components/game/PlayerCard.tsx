@@ -1,86 +1,84 @@
 'use client';
 
-import React from 'react';
-import { Crown, CheckCircle2, User } from 'lucide-react';
-import { Player } from '@/types/game';
-import { cn } from '@/lib/utils';
+import React from "react";
+import { motion } from "framer-motion";
+import { ShieldCheck, User, Zap } from "lucide-react";
+import type { Player } from "@/types/game";
 
 interface PlayerCardProps {
   player: Player;
-  isMe?: boolean;
   showStatus?: boolean;
 }
 
-export default function PlayerCard({ player, isMe = false, showStatus = true }: PlayerCardProps) {
-  const initials = player.name.charAt(0).toUpperCase();
-  
-  // Cores baseadas no nome do jogador para avatares consistentes
-  const bgColors = [
-    'bg-brand-purple',
-    'bg-brand-blue',
-    'bg-brand-green',
-    'bg-red-500',
-    'bg-pink-500',
-    'bg-orange-500'
+export default function PlayerCard({ player, showStatus = true }: PlayerCardProps) {
+  const colors = [
+    { bg: "bg-brand-purple/20", border: "border-brand-purple/40", text: "text-brand-purple" },
+    { bg: "bg-brand-blue/20", border: "border-brand-blue/40", text: "text-brand-blue" },
+    { bg: "bg-brand-yellow/20", border: "border-brand-yellow/40", text: "text-brand-yellow" },
+    { bg: "bg-brand-green/20", border: "border-brand-green/40", text: "text-brand-green" },
   ];
-  const avatarBg = bgColors[player.name.length % bgColors.length];
+  
+  const theme = colors[player.name.length % colors.length];
 
   return (
-    <div className={cn(
-      "relative group bg-brand-card/40 backdrop-blur-md rounded-2xl p-4 border transition-all duration-300",
-      isMe ? "border-brand-yellow ring-2 ring-brand-yellow/20" : "border-white/5 hover:border-white/20",
-      player.isReady ? "shadow-[0_0_20px_rgba(74,222,128,0.1)]" : ""
-    )}>
+    <motion.div 
+      initial={{ opacity: 0, x: -20 }}
+      animate={{ opacity: 1, x: 0 }}
+      whileHover={{ scale: 1.02, x: 5 }}
+      className={`group relative bg-brand-card/20 backdrop-blur-md border ${player.isReady ? 'border-brand-green/50 shadow-[0_0_20px_rgba(34,197,94,0.15)]' : 'border-white/5'} rounded-3xl p-4 flex items-center justify-between transition-all duration-300 ${player.isOnline === false ? 'opacity-40 grayscale pointer-events-none' : ''}`}
+    >
       <div className="flex items-center gap-4">
-        {/* Avatar Section */}
+        {/* Avatar Container */}
         <div className="relative">
-          <div className={cn(
-            "w-14 h-14 rounded-2xl flex items-center justify-center text-2xl font-black text-white shadow-xl transform group-hover:rotate-6 transition-transform",
-            avatarBg
-          )}>
-            {initials}
+          <div className={`w-14 h-14 rounded-2xl ${theme.bg} ${theme.border} border-2 flex items-center justify-center font-black text-2xl shadow-inner relative overflow-hidden group-hover:rotate-6 transition-transform`}>
+            <span className={theme.text}>{player.name.charAt(0).toUpperCase()}</span>
+            {/* Glossy overlay */}
+            <div className="absolute inset-0 bg-gradient-to-tr from-white/10 to-transparent pointer-events-none" />
           </div>
           
-          {player.isHost && (
-            <div className="absolute -top-2 -right-2 bg-brand-yellow p-1 rounded-lg text-brand-purple shadow-lg rotate-12">
-              <Crown size={14} fill="currentColor" />
-            </div>
-          )}
-
-          {isMe && (
-            <div className="absolute -bottom-1 -left-1 bg-brand-blue p-1 rounded-lg text-black shadow-lg">
-              <User size={10} fill="currentColor" />
-            </div>
-          )}
+          {/* Status Dot */}
+          <div className={`absolute -top-1 -right-1 w-5 h-5 rounded-full border-4 border-black flex items-center justify-center ${player.isOnline !== false ? 'bg-brand-green' : 'bg-gray-500'}`}>
+            <div className="w-1 h-1 bg-white rounded-full animate-pulse" />
+          </div>
         </div>
 
-        {/* Info Section */}
-        <div className="flex-grow min-w-0">
+        <div className="flex flex-col">
           <div className="flex items-center gap-2">
-            <h3 className="font-bold text-white truncate uppercase tracking-tight">
-              {player.name} {isMe && <span className="text-white/40 italic lowercase font-medium">(você)</span>}
-            </h3>
-          </div>
-          <div className="text-xs font-black text-brand-yellow mt-0.5 uppercase tracking-widest">
-            {player.score ?? 0} Pontos
-          </div>
-        </div>
-
-        {/* Status Indicator */}
-        {showStatus && (
-          <div className={cn(
-            "flex items-center gap-2 px-3 py-1.5 rounded-xl border transition-all",
-            player.isReady 
-              ? "bg-brand-green/20 border-brand-green/30 text-brand-green" 
-              : "bg-black/20 border-white/5 text-white/20"
-          )}>
-            <span className="text-[10px] font-black uppercase tracking-tighter">
-              {player.isReady ? 'PRONTO' : 'PENDENTE'}
+            <span className="font-black italic uppercase text-lg tracking-tight text-white/90 group-hover:text-white transition-colors">
+              {player.name}
             </span>
-            <CheckCircle2 size={14} className={player.isReady ? 'opacity-100' : 'opacity-20'} />
+            {player.score !== undefined && player.score > 0 && (
+              <div className="flex items-center gap-1 bg-brand-yellow/10 px-2 py-0.5 rounded-lg border border-brand-yellow/20">
+                <Zap size={10} className="text-brand-yellow fill-brand-yellow" />
+                <span className="text-[10px] font-black text-brand-yellow">{player.score}</span>
+              </div>
+            )}
           </div>
-        )}
+          <span className="text-[10px] font-bold text-white/30 uppercase tracking-[0.2em]">Competidor</span>
+        </div>
       </div>
-    </div>
+      
+      {showStatus && (
+        <div className="flex flex-col items-end gap-1">
+          <motion.div 
+            animate={player.isReady ? { scale: [1, 1.05, 1], rotate: [0, 2, -2, 0] } : {}}
+            transition={{ repeat: Infinity, duration: 2 }}
+            className={`px-4 py-1.5 rounded-xl text-[10px] font-black italic tracking-widest uppercase transition-all duration-500 ${
+              player.isReady 
+                ? "bg-brand-green text-black shadow-[0_0_15px_rgba(34,197,94,0.4)]" 
+                : "bg-white/5 text-white/20 border border-white/5"
+            }`}
+          >
+            {player.isReady ? "PRONTO" : "ESPERANDO"}
+          </motion.div>
+        </div>
+      )}
+
+      {/* Decorative lines */}
+      <div className="absolute right-4 bottom-2 opacity-10">
+        <div className="w-8 h-1 bg-white/20 rounded-full mb-1" />
+        <div className="w-4 h-1 bg-white/20 rounded-full ml-auto" />
+      </div>
+    </motion.div>
   );
 }

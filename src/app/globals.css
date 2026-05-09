@@ -7,22 +7,76 @@
   --color-brand-yellow: #FFD700;
   --color-brand-green: #39FF14;
   --color-brand-card: rgba(255, 255, 255, 0.1);
+  --color-brand-bg: #0A0A0B;
   
-  --font-sans: var(--font-nunito), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-inter), sans-serif;
 }
 
-:root {
-  --background: #1a0b2e;
-  --foreground: #f8f9fa;
+@layer base {
+  body {
+    @apply bg-brand-bg text-white overflow-x-hidden;
+    font-family: var(--font-sans);
+  }
 }
 
-body {
-  background-color: var(--background);
-  background-image: linear-gradient(135deg, #1a0b2e 0%, #0d1b2a 100%);
-  color: var(--foreground);
-  min-height: 100vh;
-  font-family: var(--font-sans);
-  overflow-x: hidden;
+@layer components {
+  .game-button {
+    @apply relative overflow-hidden transition-all duration-200 active:scale-95 hover:brightness-110 active:translate-y-1;
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4);
+  }
+
+  .game-card {
+    @apply bg-brand-card/80 backdrop-blur-xl border border-white/10 rounded-[2.5rem] p-6 shadow-2xl transition-all duration-300;
+  }
+
+  .neon-text {
+    text-shadow: 0 0 10px rgba(124, 58, 237, 0.5), 0 0 20px rgba(124, 58, 237, 0.3);
+  }
+
+  .neon-border {
+    @apply border-brand-purple shadow-[0_0_15px_rgba(124, 58, 237, 0.3)];
+  }
+
+  .input-game {
+    @apply bg-black/40 border-4 border-white/5 rounded-3xl px-6 py-4 font-black italic uppercase tracking-widest outline-none transition-all focus:border-brand-purple focus:ring-8 focus:ring-brand-purple/20 placeholder:text-white/10;
+  }
+}
+
+/* Animações AAA */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+@keyframes glow-pulse {
+  0%, 100% { filter: drop-shadow(0 0 5px rgba(253, 224, 71, 0.4)); }
+  50% { filter: drop-shadow(0 0 15px rgba(253, 224, 71, 0.7)); }
+}
+
+.animate-glow {
+  animation: glow-pulse 2s ease-in-out infinite;
+}
+
+/* Grid de Fundo Gamey */
+.bg-game-grid {
+  background-image: 
+    linear-gradient(rgba(124, 58, 237, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(124, 58, 237, 0.05) 1px, transparent 1px);
+  background-size: 50px 50px;
+  perspective: 1000px;
+}
+
+/* Hide scrollbar but keep functionality */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
 
 /* Background floating elements simulation */

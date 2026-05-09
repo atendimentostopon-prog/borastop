@@ -1,27 +1,21 @@
 'use client';
 
+import { use } from "react";
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { motion, AnimatePresence } from "framer-motion";
+import { Copy, Settings, Users, Lock, Sparkles, Gamepad2, Rocket, Share2, Info, X } from "lucide-react";
 import PageContainer from "@/components/layout/PageContainer";
 import PlayerCard from "@/components/game/PlayerCard";
 import ChatBox from "@/components/game/ChatBox";
 import Button from "@/components/ui/Button";
-import Card from "@/components/ui/Card";
 import Input from "@/components/ui/Input";
-import AdPlaceholder from "@/components/game/AdPlaceholder";
-import PulseGlow from "@/components/animations/PulseGlow";
-import { motion, AnimatePresence } from "framer-motion";
-import { Copy, Settings, Users, Lock } from "lucide-react";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import { Database } from "@/types/database";
 import { Player, ChatMessage } from "@/types/game";
 import { getRandomLetter } from "@/lib/game/letters";
-import { MOCK_PLAYERS } from "@/lib/mock/players";
-import { MOCK_MESSAGES } from "@/lib/mock/messages";
 
-// Helper com cast para 'any' para evitar o erro de inferência 'never' do Supabase v2 com strict mode
-// mas mantendo o uso de tipos Database para as linhas.
 const db = supabase as any;
 
 type RoomRow = Database['public']['Tables']['rooms']['Row'];
@@ -31,418 +25,331 @@ type MessageRow = Database['public']['Tables']['messages']['Row'];
 type MessageInsert = Database['public']['Tables']['messages']['Insert'];
 type RoundInsert = Database['public']['Tables']['rounds']['Insert'];
 
-export default function LobbyPage({ params }: { params: Promise<{ code: string }> | { code: string } }) {
+export default function LobbyPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
-  const [code, setCode] = useState<string>("");
+  const { code } = use(params);
+
   const [room, setRoom] = useState<RoomRow | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [myPlayerId, setMyPlayerId] = useState<string>("");
+  const [myNickname, setMyNickname] = useState<string>("");
+
   const [loading, setLoading] = useState(true);
-  const [isHost, setIsHost] = useState(false);
-  const [isReady, setIsReady] = useState(false);
-  const [localPlayerId, setLocalPlayerId] = useState<string | null>(null);
-  
-  // Usar refs para evitar stale closures em callbacks de tempo real
-  const playersRef = useRef<Player[]>([]);
-  const roomRef = useRef<RoomRow | null>(null);
+  const [error, setError] = useState("");
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordInput, setPasswordInput] = useState("");
+  const [passwordError, setPasswordError] = useState("");
+  const [isJoining, setIsJoining] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
+
+  const realtimeChannelRef = useRef<any>(null);
 
   useEffect(() => {
-    async function unwrapParams() {
-      const resolvedParams = await params;
-      setCode(resolvedParams.code);
+    if (typeof window !== 'undefined') {
+      setMyNickname(localStorage.getItem("bora_stop_nickname") || "");
     }
-    unwrapParams();
-  }, [params]);
+  }, []);
 
   useEffect(() => {
-    if (!code) return;
+    const nickname = localStorage.getItem("bora_stop_nickname");
+    if (!nickname) { router.push("/"); return; }
 
-    const nickname = localStorage.getItem('stopon_nickname') || `Jogador ${Math.floor(Math.random() * 1000)}`;
-    
-    const fetchRoomData = async () => {
-      if (!isSupabaseConfigured) {
-        setPlayers(MOCK_PLAYERS);
-        setMessages(MOCK_MESSAGES);
-        setLoading(false);
-        return;
-      }
-
+    const loadInitialData = async () => {
       try {
-        // 1. Buscar a sala
         const { data: roomData, error: roomError } = await db
           .from('rooms')
           .select('*')
           .eq('code', code)
           .single();
 
-        if (roomError || !roomData) {
-          console.error("Sala não encontrada");
-          router.push('/rooms');
-          return;
-        }
+        if (roomError || !roomData) throw new Error("Arena não localizada no radar.");
+        const typedRoom = roomData as RoomRow;
+        setRoom(typedRoom);
 
-        if (roomData.status === 'playing') {
-          router.push(`/game/${code}`);
-          return;
-        }
-
-        setRoom(roomData);
-        roomRef.current = roomData;
-
-        // 2. Tentar entrar na sala
-        const { data: existingPlayers } = await db
+        const { data: myPlayer } = await db
           .from('room_players')
           .select('*')
-          .eq('room_id', roomData.id);
+          .eq('room_id', typedRoom.id)
+          .eq('nickname', nickname)
+          .maybeSingle();
 
-        // Se a sala estiver cheia e o jogador não estiver nela, barrar
-        const isAlreadyIn = (existingPlayers as RoomPlayerRow[])?.some(p => p.nickname === nickname);
-        if (!isAlreadyIn && (existingPlayers as RoomPlayerRow[])?.length >= roomData.max_players) {
-          alert("Sala cheia!");
-          router.push('/rooms');
-          return;
-        }
-
-        // Inserir ou recuperar player
-        let myId: string;
-        if (isAlreadyIn) {
-          myId = (existingPlayers as RoomPlayerRow[]).find(p => p.nickname === nickname)!.id;
+        if (myPlayer) {
+          const typedPlayer = myPlayer as RoomPlayerRow;
+          setMyPlayerId(typedPlayer.id);
+          await finishJoin(typedRoom.id, typedPlayer.id);
         } else {
-          const newPlayer: RoomPlayerInsert = {
-            room_id: roomData.id,
-            nickname: nickname,
-            is_host: (existingPlayers as RoomPlayerRow[] || []).length === 0,
-            is_ready: false
-          };
-          const { data: pData, error: pError } = await db
-            .from('room_players')
-            .insert(newPlayer)
-            .select()
-            .single();
-          
-          if (pError) throw pError;
-          myId = (pData as RoomPlayerRow).id;
-
-          // Se for o primeiro a entrar, marcar como host da sala no banco
-          if (newPlayer.is_host) {
-             await db.from('rooms').update({ host_id: myId }).eq('id', roomData.id);
+          if (typedRoom.is_private) {
+            setShowPasswordModal(true);
+            setLoading(false);
+          } else {
+            await insertPlayerAndJoin(typedRoom.id, nickname);
           }
         }
-
-        setLocalPlayerId(myId);
-        
-        // 3. Buscar mensagens iniciais
-        const { data: msgData } = await db
-          .from('messages')
-          .select('*')
-          .eq('room_id', roomData.id)
-          .order('created_at', { ascending: true });
-        
-        if (msgData) {
-          setMessages((msgData as MessageRow[]).map(m => ({
-            id: m.id,
-            sender: m.nickname,
-            text: m.content,
-            time: new Date(m.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            isSystem: m.is_system
-          })));
-        }
-
-        // 4. Configurar Realtime
-        const roomChannel = supabase.channel(`room:${code}`)
-          .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table: 'room_players', 
-            filter: `room_id=eq.${roomData.id}` 
-          }, (payload) => {
-            refreshPlayers(roomData.id);
-          })
-          .on('postgres_changes', { 
-            event: 'UPDATE', 
-            schema: 'public', 
-            table: 'rooms', 
-            filter: `id=eq.${roomData.id}` 
-          }, (payload) => {
-            const updatedRoom = payload.new as RoomRow;
-            setRoom(updatedRoom);
-            roomRef.current = updatedRoom;
-            if (updatedRoom.status === 'playing') {
-              router.push(`/game/${code}`);
-            }
-          })
-          .on('postgres_changes', { 
-            event: 'INSERT', 
-            schema: 'public', 
-            table: 'messages', 
-            filter: `room_id=eq.${roomData.id}` 
-          }, (payload) => {
-            const m = payload.new as MessageRow;
-            setMessages(prev => [...prev, {
-              id: m.id,
-              sender: m.nickname,
-              text: m.content,
-              time: new Date(m.created_at || '').toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-              isSystem: m.is_system
-            }]);
-          })
-          .subscribe();
-
-        refreshPlayers(roomData.id);
-        setLoading(false);
-
-        return () => {
-          supabase.removeChannel(roomChannel);
-        };
-
-      } catch (err) {
-        console.error(err);
+      } catch (err: any) {
+        setError(err.message);
         setLoading(false);
       }
     };
 
-    const refreshPlayers = async (roomId: string) => {
-      const { data } = await db
-        .from('room_players')
-        .select('*')
-        .eq('room_id', roomId);
-      
-      if (data) {
-        const formatted = (data as RoomPlayerRow[]).map(p => ({
-          id: p.id,
-          name: p.nickname,
-          avatar: `https://api.dicebear.com/7.x/avataaars/svg?seed=${p.nickname}`,
-          isReady: p.is_ready,
-          isHost: p.is_host,
-          score: p.score
-        }));
-        setPlayers(formatted);
-        playersRef.current = formatted;
-
-        const me = formatted.find(p => p.name === nickname);
-        if (me) {
-          setIsHost(me.isHost);
-          setIsReady(me.isReady);
-        }
-      }
-    };
-
-    fetchRoomData();
+    loadInitialData();
+    return () => { if (realtimeChannelRef.current) supabase.removeChannel(realtimeChannelRef.current); };
   }, [code, router]);
 
-  const toggleReady = async () => {
-    if (!isSupabaseConfigured || !localPlayerId) {
-      setIsReady(!isReady);
-      return;
+  const insertPlayerAndJoin = async (roomId: string, nickname: string) => {
+    try {
+      const { data: newPlayer, error: insertError } = await db
+        .from('room_players')
+        .insert({ room_id: roomId, nickname, is_host: false } as RoomPlayerInsert)
+        .select().single();
+
+      if (insertError) throw insertError;
+      const typedPlayer = newPlayer as RoomPlayerRow;
+      setMyPlayerId(typedPlayer.id);
+      await finishJoin(roomId, typedPlayer.id);
+    } catch (err) {
+      setError("Acesso negado. Tente outro nome ou sala.");
+      setLoading(false);
     }
-
-    const nextState = !isReady;
-    setIsReady(nextState);
-
-    await db.from('room_players')
-      .update({ is_ready: nextState })
-      .eq('id', localPlayerId);
   };
 
-  const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
-    const nickname = localStorage.getItem('stopon_nickname') || 'Anônimo';
-
-    if (isSupabaseConfigured && room) {
-      const newMsg: MessageInsert = {
-        room_id: room.id,
-        nickname,
-        content: text,
-        is_system: false
-      };
-      await db.from('messages').insert(newMsg);
-    } else {
-      const mockMsg: ChatMessage = {
-        id: Math.random().toString(),
-        sender: nickname,
-        text,
-        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-      };
-      setMessages(prev => [...prev, mockMsg]);
+  const handlePasswordSubmit = async () => {
+    if (!passwordInput.trim()) { setPasswordError("Senha obrigatória."); return; }
+    setIsJoining(true);
+    if (passwordInput.trim() !== room?.password) {
+      setPasswordError("Chave de acesso inválida.");
+      setIsJoining(false);
+      return;
     }
+    const nickname = localStorage.getItem("bora_stop_nickname");
+    if (nickname && room) await insertPlayerAndJoin(room.id, nickname);
+    setIsJoining(false);
+    setShowPasswordModal(false);
+  };
+
+  const finishJoin = async (roomId: string, currentPlayerId: string) => {
+    try {
+      const { data: playersData } = await db.from('room_players').select('*').eq('room_id', roomId).order('joined_at', { ascending: true });
+      if (playersData) setPlayers((playersData as RoomPlayerRow[]).map(p => ({ id: p.id, name: p.nickname, isReady: p.is_ready, score: p.score })));
+      
+      const { data: messagesData } = await db.from('messages').select('*').eq('room_id', roomId).order('created_at', { ascending: true });
+      if (messagesData) setMessages((messagesData as MessageRow[]).map(m => ({ id: m.id, playerId: m.player_id, playerName: m.nickname, text: m.message, isSystem: m.is_system })));
+
+      setupRealtime(roomId, currentPlayerId);
+    } finally { setLoading(false); }
+  };
+
+  const setupRealtime = (roomId: string, currentPlayerId: string) => {
+    const channel = supabase
+      .channel(`lobby-${roomId}`)
+      .on('presence', { event: 'sync' }, () => {
+        const onlineIds = Object.values(channel.presenceState<{ player_id: string }>()).flatMap(p => p.map(x => x.player_id));
+        setPlayers(prev => prev.map(p => ({ ...p, isOnline: onlineIds.includes(p.id) })));
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'room_players', filter: `room_id=eq.${roomId}` }, (payload) => {
+        if (payload.eventType === 'INSERT') {
+          const newP = payload.new as RoomPlayerRow;
+          setPlayers(prev => [...prev, { id: newP.id, name: newP.nickname, isReady: newP.is_ready, score: newP.score }]);
+        } else if (payload.eventType === 'UPDATE') {
+          const updatedP = payload.new as RoomPlayerRow;
+          setPlayers(prev => prev.map(p => p.id === updatedP.id ? { ...p, isReady: updatedP.is_ready, score: updatedP.score } : p));
+        } else if (payload.eventType === 'DELETE') {
+          setPlayers(prev => prev.filter(p => p.id !== (payload.old as any).id));
+        }
+      })
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages', filter: `room_id=eq.${roomId}` }, (payload) => {
+        const newMsg = payload.new as MessageRow;
+        setMessages(prev => [...prev, { id: newMsg.id, playerId: newMsg.player_id, playerName: newMsg.nickname, text: newMsg.message, isSystem: newMsg.is_system }]);
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'rooms', filter: `id=eq.${roomId}` }, (payload) => {
+        if ((payload.new as RoomRow).status === 'playing') router.push(`/game/${code}`);
+      })
+      .subscribe(async (status) => { if (status === 'SUBSCRIBED') await channel.track({ player_id: currentPlayerId }); });
+
+    realtimeChannelRef.current = channel;
+  };
+
+  const toggleReady = async () => {
+    if (!myPlayerId) return;
+    const myPlayer = players.find(p => p.id === myPlayerId);
+    if (!myPlayer) return;
+    const newStatus = !myPlayer.isReady;
+    setPlayers(prev => prev.map(p => myPlayerId === p.id ? { ...p, isReady: newStatus } : p));
+    await db.from('room_players').update({ is_ready: newStatus }).eq('id', myPlayerId);
   };
 
   const startGame = async () => {
-    if (!room) return;
-    
-    // Na fase 3, aqui sorteamos a letra e criamos a primeira rodada
-    if (isSupabaseConfigured) {
-      // 1. Sortear letra inicial (usando lib/game/letters)
-      const letter = getRandomLetter(room.allowed_letters || []);
-      
-      // 2. Criar a primeira rodada
-      const newRound: RoundInsert = {
-        room_id: room.id,
-        round_number: 1,
-        letter,
-        status: 'playing',
-        started_at: new Date().toISOString()
-      };
-      
-      await db.from('rounds').insert(newRound);
-
-      // 3. Atualizar sala para 'playing'
-      await db.from('rooms')
-        .update({ 
-          status: 'playing',
-          current_round: 1
-        })
-        .eq('id', room.id);
-    } else {
-      router.push(`/game/${code}`);
+    if (!room?.id || isStarting) return;
+    setIsStarting(true);
+    try {
+      if (players.length < 2 || !players.every(p => p.isReady)) {
+        alert("Todos os jogadores devem estar PRONTOS!");
+        setIsStarting(false);
+        return;
+      }
+      const letter = getRandomLetter(room.allowed_letters ?? []);
+      await db.from('rounds').insert({ room_id: room.id, round_number: 1, letter, status: 'playing', started_at: new Date().toISOString() } as RoundInsert);
+      await db.from('rooms').update({ status: 'playing', current_round: 1 }).eq('id', room.id);
+    } catch (err) {
+      console.error(err);
+      setIsStarting(false);
     }
   };
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(code);
-    alert("Código copiado!");
+  const handleSendMessage = async (text: string) => {
+    if (!text.trim() || !room) return;
+    const nickname = localStorage.getItem("bora_stop_nickname") || "Jogador";
+    try {
+      await db.from('messages').insert({
+        room_id: room.id,
+        player_id: myPlayerId || null,
+        nickname,
+        message: text.trim(),
+        is_system: false,
+      } as MessageInsert);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
-  if (loading) return <div className="min-h-screen bg-brand-bg flex items-center justify-center text-white/50 animate-pulse font-bold uppercase tracking-widest">Sincronizando com a sala...</div>;
+  if (loading) return (
+    <PageContainer className="flex flex-col items-center justify-center min-h-[70vh] gap-6">
+      <div className="w-20 h-20 bg-brand-purple/20 rounded-full border-4 border-brand-purple/40 border-t-brand-purple animate-spin" />
+      <h2 className="text-xl font-black uppercase italic animate-pulse">Sincronizando com a Arena...</h2>
+    </PageContainer>
+  );
 
-  const readyCount = players.filter(p => p.isReady).length;
-  const canStart = isHost && readyCount >= 1; // Pelo menos o host (ou outro) pronto para teste, idealmente >= 2
+  if (showPasswordModal && room) return (
+    <PageContainer className="flex items-center justify-center min-h-[70vh]">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card max-w-md p-10 text-center">
+        <Lock size={60} className="mx-auto text-brand-yellow mb-6 drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" />
+        <h2 className="text-3xl font-black uppercase italic mb-2">Arena Privada</h2>
+        <p className="text-white/50 text-sm mb-8">Essa partida exige uma chave de segurança.</p>
+        <Input type="password" placeholder="SENHA DA SALA" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} error={passwordError} className="input-game text-center h-16 text-2xl tracking-[0.3em]" />
+        <div className="mt-8 space-y-4">
+          <Button fullWidth onClick={handlePasswordSubmit} disabled={isJoining} className="game-button h-16 text-lg">ENTRAR AGORA</Button>
+          <Link href="/rooms" className="block text-white/30 font-bold uppercase text-[10px] tracking-widest hover:text-white transition-colors">Abortar Missão</Link>
+        </div>
+      </motion.div>
+    </PageContainer>
+  );
+
+  const amIHost = room?.host_nickname === myNickname;
+  const myPlayer = players.find(p => p.id === myPlayerId);
 
   return (
-    <PageContainer>
-      <div className="max-w-6xl mx-auto">
-        {/* Top Header do Lobby */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2 text-brand-yellow font-black uppercase italic tracking-tighter text-sm mb-1">
-              {room?.is_private ? <Lock size={14} /> : <Users size={14} />}
-              {room?.is_private ? 'Sala Privada' : 'Sala Pública'}
+    <PageContainer className="relative">
+      <div className="absolute inset-0 bg-game-grid opacity-5 pointer-events-none" />
+      
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
+        
+        {/* Lado Esquerdo: Players & Sala */}
+        <div className="lg:col-span-8 flex flex-col gap-6">
+          
+          <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-brand-card/30 backdrop-blur-3xl rounded-[3rem] p-8 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
+            <div className="flex items-center gap-6">
+              <div className="w-20 h-20 bg-brand-purple/10 rounded-[2rem] border border-brand-purple/20 flex items-center justify-center text-brand-purple shadow-inner">
+                <Gamepad2 size={40} />
+              </div>
+              <div>
+                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 block mb-1">Código de Acesso</span>
+                <h1 className="text-5xl md:text-6xl font-black font-mono tracking-tighter text-brand-yellow neon-text">
+                  {room?.code}
+                </h1>
+              </div>
             </div>
-            <h1 className="text-4xl md:text-5xl font-black uppercase italic text-white drop-shadow-[0_2px_0_#6A1B9A]">
-              {room?.name || 'Carregando...'}
-            </h1>
-          </div>
 
-          <div className="flex items-center gap-3 bg-black/20 p-2 rounded-2xl border border-white/10 backdrop-blur-sm">
-            <div className="px-4">
-              <span className="block text-[10px] font-bold text-white/40 uppercase tracking-widest">Código da Sala</span>
-              <span className="text-2xl font-black text-brand-yellow font-mono tracking-wider uppercase">{code}</span>
+            <div className="flex items-center gap-4">
+              <motion.button 
+                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
+                onClick={() => navigator.clipboard.writeText(window.location.href)}
+                className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-black uppercase italic text-xs"
+              >
+                <Share2 size={18} className="text-brand-blue" /> Convidar Amigos
+              </motion.button>
+              <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/20">
+                <Settings size={20} />
+              </div>
             </div>
-            <button 
-              onClick={copyCode}
-              className="p-4 bg-brand-purple hover:bg-brand-purple-light text-white rounded-xl transition-all active:scale-95 shadow-lg"
-            >
-              <Copy size={20} />
-            </button>
-          </div>
-        </div>
+          </motion.div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Coluna da Esquerda: Jogadores */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="flex items-center justify-between px-2">
-              <h2 className="text-xl font-black uppercase italic flex items-center gap-2">
-                <Users className="text-brand-yellow" />
-                Jogadores ({players.length}/{room?.max_players || 8})
-              </h2>
-              <div className="flex items-center gap-2 bg-white/5 px-3 py-1 rounded-full border border-white/5">
-                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                <span className="text-[10px] font-bold text-white/50 uppercase tracking-widest">{readyCount} prontos</span>
+          <div className="game-card flex-1 p-8 bg-brand-card/20 min-h-[500px]">
+            <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
+              <div className="flex items-center gap-3">
+                <Users className="text-brand-blue" size={24} />
+                <h2 className="text-2xl font-black uppercase italic tracking-tight text-white/80">Lista de Jogadores</h2>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5">
+                <span className="w-2 h-2 bg-brand-green rounded-full animate-pulse" />
+                <span className="text-sm font-black italic">{players.length} / {room?.max_players || 10}</span>
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <AnimatePresence>
-                {players.map((player) => (
-                  <motion.div
-                    key={player.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, scale: 0.95 }}
-                  >
-                    <PlayerCard player={player} isMe={player.id === localPlayerId} />
+              <AnimatePresence mode="popLayout">
+                {players.map((player, idx) => (
+                  <motion.div key={player.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}>
+                    <PlayerCard player={player} />
                   </motion.div>
                 ))}
               </AnimatePresence>
-              
-              {/* Slots vazios */}
-              {Array.from({ length: Math.max(0, (room?.max_players || 4) - players.length) }).map((_, i) => (
-                <div key={`empty-${i}`} className="border-2 border-dashed border-white/5 rounded-2xl h-24 flex items-center justify-center opacity-30">
-                  <span className="text-xs font-bold uppercase tracking-widest text-white/20 italic">Aguardando...</span>
-                </div>
-              ))}
             </div>
+          </div>
+        </div>
 
-            {/* Ações do Lobby */}
-            <Card className="p-8 bg-brand-card/90 backdrop-blur-md border-white/10 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex flex-col gap-2">
-                <h3 className="font-black uppercase italic text-xl">
-                  {isReady ? 'Você está pronto!' : 'Preparado para o Stop?'}
-                </h3>
-                <p className="text-sm text-white/50">
-                  O jogo começará assim que o host der o sinal.
-                </p>
+        {/* Lado Direito: Chat & Ações */}
+        <div className="lg:col-span-4 flex flex-col gap-6">
+          
+          <div className="bg-brand-card/20 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-6 flex flex-col gap-4">
+            <div className="flex items-center gap-2 text-white/20 mb-2">
+              <Info size={14} />
+              <span className="text-[10px] font-black uppercase tracking-widest">Configurações Ativas</span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">Rodadas</p>
+                <p className="text-xl font-black italic text-white">{room?.total_rounds}</p>
               </div>
-
-              <div className="flex items-center gap-4 w-full md:w-auto">
-                <Button 
-                  variant={isReady ? 'secondary' : 'default'}
-                  size="lg"
-                  className={`flex-grow md:flex-none px-12 h-16 text-lg shadow-xl transition-all ${isReady ? 'ring-4 ring-green-500/20' : ''}`}
-                  onClick={toggleReady}
-                >
-                  {isReady ? 'Estou Pronto!' : 'Ficar Pronto'}
-                </Button>
-
-                {isHost && (
-                  <PulseGlow color="rgba(255, 215, 0, 0.3)" active={canStart}>
-                    <Button 
-                      variant="primary"
-                      size="lg"
-                      className="h-16 px-8 shadow-[0_6px_0_#B8860B] active:translate-y-1 active:shadow-none disabled:opacity-30 disabled:grayscale transition-all"
-                      disabled={!canStart}
-                      onClick={startGame}
-                    >
-                      COMEÇAR
-                    </Button>
-                  </PulseGlow>
-                )}
+              <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">Tempo</p>
+                <p className="text-xl font-black italic text-brand-yellow">{room?.round_time}s</p>
               </div>
-            </Card>
+            </div>
           </div>
 
-          {/* Coluna da Direita: Chat e Infos */}
-          <div className="lg:col-span-4 space-y-6">
-             <ChatBox 
-              messages={messages} 
-              onSendMessage={sendMessage}
-              className="h-[500px] lg:h-[600px]"
-             />
-             
-             <Card className="p-6 bg-brand-purple/20 border-white/10">
-               <div className="flex items-center gap-3 mb-4">
-                 <div className="p-2 bg-brand-yellow rounded-lg text-brand-purple">
-                   <Settings size={18} />
-                 </div>
-                 <h4 className="font-black uppercase italic text-sm tracking-widest">Regras da Sala</h4>
-               </div>
-               <ul className="space-y-3">
-                 <li className="flex justify-between text-xs font-medium">
-                   <span className="text-white/40">Rodadas:</span>
-                   <span className="font-bold">{room?.total_rounds || 5}</span>
-                 </li>
-                 <li className="flex justify-between text-xs font-medium">
-                   <span className="text-white/40">Categorias:</span>
-                   <span className="font-bold">6 Ativas</span>
-                 </li>
-                 <li className="flex justify-between text-xs font-medium">
-                   <span className="text-white/40">Tempo por Round:</span>
-                   <span className="font-bold">Ilimitado</span>
-                 </li>
-               </ul>
-             </Card>
+          <ChatBox messages={messages} onSendMessage={handleSendMessage} className="flex-1 min-h-[400px] bg-brand-card/10!" />
 
-             <AdPlaceholder type="rectangle" />
+          <div className="space-y-4 pt-4">
+            <motion.button
+              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+              onClick={toggleReady}
+              className={`w-full h-20 rounded-[2rem] border-4 transition-all duration-500 font-black uppercase italic tracking-[0.2em] shadow-2xl flex items-center justify-center gap-4 ${myPlayer?.isReady ? 'bg-red-500/10 border-red-500 text-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'bg-brand-green/10 border-brand-green text-brand-green shadow-[0_0_30px_rgba(34,197,94,0.2)]'}`}
+            >
+              {myPlayer?.isReady ? 'CANCELAR PRONTO' : 'ESTOU PRONTO'}
+              {myPlayer?.isReady ? <X size={24} /> : <Rocket size={24} />}
+            </motion.button>
+
+            {amIHost && (
+              <div className="space-y-3">
+                <Button
+                  onClick={startGame}
+                  variant="primary"
+                  className="game-button w-full h-20 text-2xl font-black italic tracking-widest"
+                  disabled={isStarting || players.length < 2 || !players.every(p => p.isReady)}
+                >
+                  {isStarting ? 'LANÇANDO...' : 'INICIAR ARENA'}
+                  <Sparkles size={24} className="ml-4" />
+                </Button>
+                
+                <AnimatePresence>
+                  {(players.length < 2 || !players.every(p => p.isReady)) && (
+                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center text-[10px] font-black uppercase text-brand-yellow tracking-[0.3em] animate-pulse">
+                      Aguardando esquadrão ficar pronto...
+                    </motion.p>
+                  )}
+                </AnimatePresence>
+              </div>
+            )}
           </div>
         </div>
       </div>
