@@ -5,16 +5,16 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
-import { Copy, Settings, Users, Lock, Sparkles, Gamepad2, Rocket, Share2, Info, X } from "lucide-react";
-import PageContainer from "@/components/layout/PageContainer";
+import { Copy, Settings, Users, Lock, Sparkles, Gamepad2, Rocket, Share2, Info, X, LogOut, ArrowLeft } from "lucide-react";
 import PlayerCard from "@/components/game/PlayerCard";
 import ChatBox from "@/components/game/ChatBox";
-import Button from "@/components/ui/Button";
-import Input from "@/components/ui/Input";
-import { supabase, isSupabaseConfigured } from "@/lib/supabase/client";
+import GameButton from "@/components/game/GameButton";
+import GameModal from "@/components/game/GameModal";
+import { supabase } from "@/lib/supabase/client";
 import { Database } from "@/types/database";
 import { Player, ChatMessage } from "@/types/game";
 import { getRandomLetter } from "@/lib/game/letters";
+import { useToast } from "@/components/ui/ToastProvider";
 
 const db = supabase as any;
 
@@ -28,6 +28,7 @@ type RoundInsert = Database['public']['Tables']['rounds']['Insert'];
 export default function LobbyPage({ params }: { params: Promise<{ code: string }> }) {
   const router = useRouter();
   const { code } = use(params);
+  const { addToast } = useToast();
 
   const [room, setRoom] = useState<RoomRow | null>(null);
   const [players, setPlayers] = useState<Player[]>([]);
@@ -42,6 +43,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
   const [passwordError, setPasswordError] = useState("");
   const [isJoining, setIsJoining] = useState(false);
   const [isStarting, setIsStarting] = useState(false);
+  const [isExitModalOpen, setIsExitModalOpen] = useState(false);
 
   const realtimeChannelRef = useRef<any>(null);
 
@@ -183,7 +185,7 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     setIsStarting(true);
     try {
       if (players.length < 2 || !players.every(p => p.isReady)) {
-        alert("Todos os jogadores devem estar PRONTOS!");
+        addToast("Todos os jogadores devem estar PRONTOS!", "error");
         setIsStarting(false);
         return;
       }
@@ -212,147 +214,214 @@ export default function LobbyPage({ params }: { params: Promise<{ code: string }
     }
   };
 
+  const handleExitRoom = async () => {
+    if (myPlayerId) {
+       await db.from('room_players').delete().eq('id', myPlayerId);
+    }
+    router.push('/');
+  };
+
   if (loading) return (
-    <PageContainer className="flex flex-col items-center justify-center min-h-[70vh] gap-6">
+    <div className="flex flex-col items-center justify-center h-full gap-6">
       <div className="w-20 h-20 bg-brand-purple/20 rounded-full border-4 border-brand-purple/40 border-t-brand-purple animate-spin" />
       <h2 className="text-xl font-black uppercase italic animate-pulse">Sincronizando com a Arena...</h2>
-    </PageContainer>
+    </div>
   );
 
   if (showPasswordModal && room) return (
-    <PageContainer className="flex items-center justify-center min-h-[70vh]">
-      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card max-w-md p-10 text-center rounded-[3rem] border bg-brand-card/20 backdrop-blur-3xl shadow-2xl">
+    <div className="flex items-center justify-center h-full">
+      <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="game-card max-w-md p-10 text-center bg-[#151722]">
         <Lock size={60} className="mx-auto text-brand-yellow mb-6 drop-shadow-[0_0_15px_rgba(255,215,0,0.5)]" />
         <h2 className="text-3xl font-black uppercase italic mb-2">Arena Privada</h2>
-        <p className="text-white/50 text-sm mb-8">Essa partida exige uma chave de segurança.</p>
-        <Input type="password" placeholder="SENHA DA SALA" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} error={passwordError} className="input-game text-center h-16 text-2xl tracking-[0.3em]" />
+        <p className="text-white/50 text-xs font-bold uppercase tracking-widest mb-8">Essa partida exige uma chave de segurança.</p>
+        <div className="space-y-4">
+           <input 
+             type="password" 
+             placeholder="SENHA DA SALA" 
+             value={passwordInput} 
+             onChange={(e) => {
+               setPasswordInput(e.target.value);
+               setPasswordError("");
+             }} 
+             className={`w-full h-16 bg-black/40 border-2 rounded-2xl px-6 text-center text-2xl font-black tracking-[0.3em] outline-none transition-all ${passwordError ? 'border-red-500' : 'border-white/5 focus:border-brand-yellow'}`} 
+           />
+           {passwordError && <p className="text-red-500 text-[10px] font-black uppercase">{passwordError}</p>}
+        </div>
         <div className="mt-8 space-y-4">
-          <Button fullWidth onClick={handlePasswordSubmit} disabled={isJoining} className="game-button h-16 text-lg">ENTRAR AGORA</Button>
-          <Link href="/rooms" className="block text-white/30 font-bold uppercase text-[10px] tracking-widest hover:text-white transition-colors">Abortar Missão</Link>
+          <GameButton title="ENTRAR AGORA" onClick={handlePasswordSubmit} disabled={isJoining} variant="accent" className="w-full h-16 rounded-2xl" />
+          <button 
+            onClick={() => router.push('/rooms')}
+            className="block w-full text-white/30 font-black uppercase text-[10px] tracking-widest hover:text-white transition-colors"
+          >
+            Abortar Missão
+          </button>
         </div>
       </motion.div>
-    </PageContainer>
+    </div>
   );
 
   const amIHost = room?.host_nickname === myNickname;
   const myPlayer = players.find(p => p.id === myPlayerId);
 
   return (
-    <PageContainer className="relative">
-      <div className="absolute inset-0 bg-game-grid opacity-5 pointer-events-none" />
-      
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 relative z-10">
-        
-        {/* Lado Esquerdo: Players & Sala */}
-        <div className="lg:col-span-8 flex flex-col gap-6">
-          
-          <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-brand-card/30 backdrop-blur-3xl rounded-[3rem] p-8 border border-white/5 flex flex-col md:flex-row items-center justify-between gap-8 shadow-2xl">
-            <div className="flex items-center gap-6">
-              <div className="w-20 h-20 bg-brand-purple/10 rounded-[2rem] border border-brand-purple/20 flex items-center justify-center text-brand-purple shadow-inner">
-                <Gamepad2 size={40} />
-              </div>
-              <div>
-                <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white/30 block mb-1">Código de Acesso</span>
-                <h1 className="text-5xl md:text-6xl font-black font-mono tracking-tighter text-brand-yellow neon-text">
-                  {room?.code}
-                </h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <motion.button 
-                whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}
-                onClick={() => navigator.clipboard.writeText(window.location.href)}
-                className="flex items-center gap-3 px-6 py-4 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all font-black uppercase italic text-xs"
-              >
-                <Share2 size={18} className="text-brand-blue" /> Convidar Amigos
-              </motion.button>
-              <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white/20">
-                <Settings size={20} />
-              </div>
-            </div>
-          </motion.div>
-
-          <div className="game-card flex-1 p-8 bg-brand-card/20 min-h-[500px] rounded-[3rem] border backdrop-blur-md">
-            <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
-              <div className="flex items-center gap-3">
-                <Users className="text-brand-blue" size={24} />
-                <h2 className="text-2xl font-black uppercase italic tracking-tight text-white/80">Lista de Jogadores</h2>
-              </div>
-              <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5">
-                <span className="w-2 h-2 bg-brand-green rounded-full animate-pulse" />
-                <span className="text-sm font-black italic">{players.length} / {room?.max_players || 10}</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <AnimatePresence mode="popLayout">
-                {players.map((player, idx) => (
-                  <motion.div key={player.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}>
-                    <PlayerCard player={player} />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+    <div className="flex-1 flex flex-col h-full overflow-hidden">
+      {/* Lobby Header */}
+      <div className="p-8 pb-4 flex flex-col md:flex-row justify-between items-start md:items-center gap-6 border-b border-white/5 bg-white/[0.02]">
+        <div className="flex items-center gap-6">
+          <button 
+            onClick={() => setIsExitModalOpen(true)}
+            className="p-3 bg-white/5 hover:bg-white/10 rounded-2xl transition-all text-white/40 hover:text-white border border-white/5"
+          >
+            <LogOut size={20} />
+          </button>
+          <div>
+            <h1 className="text-3xl font-black uppercase italic tracking-tighter text-white neon-text">
+              {room?.name}
+            </h1>
+            <div className="flex items-center gap-3 mt-1">
+               <span className="text-[10px] text-brand-yellow font-black uppercase tracking-[0.2em] flex items-center gap-2">
+                 <Hash size={10} /> {room?.code}
+               </span>
+               <span className="w-1 h-1 bg-white/10 rounded-full" />
+               <span className="text-[10px] text-white/40 font-black uppercase tracking-[0.2em]">{room?.is_private ? 'Privada' : 'Pública'}</span>
             </div>
           </div>
         </div>
 
-        {/* Lado Direito: Chat & Ações */}
-        <div className="lg:col-span-4 flex flex-col gap-6">
+        <div className="flex items-center gap-4 w-full md:w-auto">
+          <button 
+            onClick={() => navigator.clipboard.writeText(window.location.href)}
+            className="p-4 bg-white/5 hover:bg-white/10 rounded-2xl transition-all border border-white/5 flex items-center gap-2"
+          >
+            <Share2 size={18} className="text-brand-blue" />
+            <span className="hidden md:inline text-[10px] font-black uppercase tracking-widest text-white/60">Convidar</span>
+          </button>
+          <div className="w-12 h-12 rounded-2xl bg-white/5 border border-white/5 flex items-center justify-center text-white/20">
+            <Settings size={20} />
+          </div>
+        </div>
+      </div>
+
+      {/* Lobby Content */}
+      <div className="flex-1 overflow-y-auto p-8 no-scrollbar">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 h-fit pb-24">
           
-          <div className="bg-brand-card/20 backdrop-blur-2xl rounded-[3rem] border border-white/5 p-6 flex flex-col gap-4 shadow-xl">
-            <div className="flex items-center gap-2 text-white/20 mb-2">
-              <Info size={14} />
-              <span className="text-[10px] font-black uppercase tracking-widest">Configurações Ativas</span>
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">Rodadas</p>
-                <p className="text-xl font-black italic text-white">{room?.total_rounds}</p>
+          {/* Players Grid */}
+          <div className="lg:col-span-8 space-y-6">
+            <div className="game-card p-8 bg-white/[0.01] border-white/5 min-h-[500px]">
+              <div className="flex justify-between items-center mb-8 border-b border-white/5 pb-4">
+                <div className="flex items-center gap-3">
+                  <Users className="text-brand-blue" size={24} />
+                  <h2 className="text-2xl font-black uppercase italic tracking-tight text-white/80">Lista de Jogadores</h2>
+                </div>
+                <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-white/5 border border-white/5">
+                  <span className="w-2 h-2 bg-brand-green rounded-full animate-pulse" />
+                  <span className="text-[10px] font-black italic tracking-widest">{players.length} / {room?.max_players || 10}</span>
+                </div>
               </div>
-              <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
-                <p className="text-[10px] font-black text-white/20 uppercase tracking-widest mb-1">Tempo</p>
-                <p className="text-xl font-black italic text-brand-yellow">{room?.round_time}s</p>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <AnimatePresence mode="popLayout">
+                  {players.map((player, idx) => (
+                    <motion.div key={player.id} layout initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: idx * 0.05 }}>
+                      <PlayerCard player={player} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
               </div>
             </div>
           </div>
 
-          <ChatBox messages={messages} onSendMessage={handleSendMessage} className="flex-1 min-h-[400px] bg-brand-card/10!" />
-
-          <div className="space-y-4 pt-4">
-            <motion.button
-              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-              onClick={toggleReady}
-              className={`w-full h-20 rounded-[2rem] border-4 transition-all duration-500 font-black uppercase italic tracking-[0.2em] shadow-2xl flex items-center justify-center gap-4 ${myPlayer?.isReady ? 'bg-red-500/10 border-red-500 text-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]' : 'bg-brand-green/10 border-brand-green text-brand-green shadow-[0_0_30px_rgba(34,197,94,0.2)]'}`}
-            >
-              {myPlayer?.isReady ? 'CANCELAR PRONTO' : 'ESTOU PRONTO'}
-              {myPlayer?.isReady ? <X size={24} /> : <Rocket size={24} />}
-            </motion.button>
-
-            {amIHost && (
-              <div className="space-y-3">
-                <Button
-                  onClick={startGame}
-                  variant="primary"
-                  className="game-button w-full h-20 text-2xl font-black italic tracking-widest"
-                  disabled={isStarting || players.length < 2 || !players.every(p => p.isReady)}
-                >
-                  {isStarting ? 'LANÇANDO...' : 'INICIAR ARENA'}
-                  <Sparkles size={24} className="ml-4" />
-                </Button>
-                
-                <AnimatePresence>
-                  {(players.length < 2 || !players.every(p => p.isReady)) && (
-                    <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="text-center text-[10px] font-black uppercase text-brand-yellow tracking-[0.3em] animate-pulse">
-                      Aguardando esquadrão ficar pronto...
-                    </motion.p>
-                  )}
-                </AnimatePresence>
+          {/* Sidebar: Chat & Configs */}
+          <div className="lg:col-span-4 flex flex-col gap-6">
+            <div className="game-card p-6 border-white/5 bg-white/[0.01]">
+              <div className="flex items-center gap-2 text-white/20 mb-4">
+                <Info size={14} />
+                <span className="text-[10px] font-black uppercase tracking-widest">Configurações Ativas</span>
               </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                  <p className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">Rodadas</p>
+                  <p className="text-xl font-black italic text-white leading-none">{room?.total_rounds}</p>
+                </div>
+                <div className="bg-black/40 p-4 rounded-2xl border border-white/5">
+                  <p className="text-[8px] font-black text-white/20 uppercase tracking-widest mb-1">Tempo</p>
+                  <p className="text-xl font-black italic text-brand-yellow leading-none">{room?.round_time}s</p>
+                </div>
+              </div>
+            </div>
+
+            <ChatBox messages={messages} onSendMessage={handleSendMessage} className="flex-1 min-h-[400px]" />
+          </div>
+        </div>
+      </div>
+
+      {/* Footer Actions */}
+      <div className="absolute bottom-0 left-0 w-full p-8 bg-gradient-to-t from-[#0F111A] via-[#0F111A]/90 to-transparent z-50">
+        <div className="flex items-center justify-between max-w-5xl mx-auto bg-[#1A1C26] p-4 rounded-[2.5rem] border border-white/10 shadow-2xl">
+          <div className="hidden md:flex items-center gap-6 ml-6">
+            <div className="flex flex-col">
+              <span className="text-[8px] font-black uppercase text-white/30 tracking-[0.2em]">Sua Condição</span>
+              <span className={`text-sm font-black italic uppercase ${myPlayer?.isReady ? 'text-brand-green' : 'text-brand-yellow'}`}>
+                {myPlayer?.isReady ? 'Pronto para o Combate' : 'Preparando Equipamento'}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <GameButton 
+              title={myPlayer?.isReady ? "NÃO ESTOU PRONTO" : "ESTOU PRONTO"}
+              subtitle={myPlayer?.isReady ? "Aguardar um pouco mais" : "Confirmar minha entrada"}
+              icon={myPlayer?.isReady ? X : Rocket}
+              variant={myPlayer?.isReady ? "danger" : "primary"}
+              onClick={toggleReady}
+              className="flex-1 md:w-64 h-20 rounded-2xl"
+            />
+            
+            {amIHost && (
+              <GameButton 
+                title={isStarting ? "LANÇANDO..." : "INICIAR ARENA"}
+                subtitle={isStarting ? "Boa sorte!" : "Começar a partida"}
+                icon={Sparkles}
+                variant="accent"
+                onClick={startGame}
+                disabled={isStarting || players.length < 2 || !players.every(p => p.isReady)}
+                className="flex-1 md:w-64 h-20 rounded-2xl"
+              />
             )}
           </div>
         </div>
       </div>
-    </PageContainer>
+
+      {/* Exit Confirmation Modal */}
+      <GameModal 
+        isOpen={isExitModalOpen} 
+        onClose={() => setIsExitModalOpen(false)}
+        title="Abortar Missão?"
+      >
+        <div className="space-y-8 text-center">
+          <div className="w-20 h-20 bg-red-500/10 rounded-full flex items-center justify-center mx-auto text-red-500 border border-red-500/20">
+            <LogOut size={40} />
+          </div>
+          <p className="text-white/60 font-bold uppercase tracking-widest text-xs leading-relaxed">
+            Deseja realmente sair da arena? <br /> Seu progresso será perdido.
+          </p>
+          <div className="flex gap-4">
+             <button 
+               onClick={() => setIsExitModalOpen(false)}
+               className="flex-1 h-14 rounded-2xl bg-white/5 border border-white/5 font-black uppercase text-[10px] tracking-widest hover:bg-white/10 transition-all"
+             >
+               Não, Continuar
+             </button>
+             <button 
+               onClick={handleExitRoom}
+               className="flex-1 h-14 rounded-2xl bg-red-500 text-white font-black uppercase text-[10px] tracking-widest shadow-lg hover:scale-105 active:scale-95 transition-all"
+             >
+               Sim, Sair
+             </button>
+          </div>
+        </div>
+      </GameModal>
+    </div>
   );
 }
