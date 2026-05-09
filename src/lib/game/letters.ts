@@ -1,15 +1,15 @@
-export const DEFAULT_LETTERS = "ABCDEFGHIJKLMNOPRSTUV".split("");
+const ALL_LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
-export function getRandomLetter(allowedLetters: string[], usedLetters: string[] = []): string {
-  const availableLetters = allowedLetters.length > 0 
-    ? allowedLetters.filter(l => !usedLetters.includes(l))
-    : DEFAULT_LETTERS.filter(l => !usedLetters.includes(l));
+export function getRandomLetter(allowedLetters: string[] = [], usedLetters: string[] = []): string {
+  const pool = allowedLetters.length > 0 ? allowedLetters : ALL_LETTERS;
+  const available = pool.filter(l => !usedLetters.includes(l));
+  
+  // Se todas as letras permitidas já foram usadas, resetamos o pool (exceto a última para evitar repetição imediata)
+  if (available.length === 0) {
+    const last = usedLetters[usedLetters.length - 1];
+    const resetPool = pool.filter(l => l !== last);
+    return resetPool[Math.floor(Math.random() * resetPool.length)];
+  }
 
-  // Se todas as letras já foram usadas, ignora o usedLetters (permite repetir)
-  const lettersToUse = availableLetters.length > 0 
-    ? availableLetters 
-    : (allowedLetters.length > 0 ? allowedLetters : DEFAULT_LETTERS);
-
-  const randomIndex = Math.floor(Math.random() * lettersToUse.length);
-  return lettersToUse[randomIndex].toUpperCase();
+  return available[Math.floor(Math.random() * available.length)];
 }

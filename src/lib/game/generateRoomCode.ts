@@ -1,8 +1,9 @@
 export function generateRoomCode(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-  let result = '';
-  for (let i = 0; i < 5; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  // Gera um código de 6 caracteres (letras e números)
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
   }
-  return result;
+  return code;
 }
