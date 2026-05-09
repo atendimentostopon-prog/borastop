@@ -3,14 +3,34 @@ import { Timer } from "lucide-react";
 import { motion } from "framer-motion";
 
 interface TimerBarProps {
-  timeRemaining: number; // in seconds
-  totalTime: number; // in seconds
+  active?: boolean;
+  duration?: number;
+  onTimeUp?: () => void;
 }
 
-export default function TimerBar({ timeRemaining, totalTime }: TimerBarProps) {
+export default function TimerBar({ active = true, duration = 60, onTimeUp }: TimerBarProps) {
+  const [timeRemaining, setTimeRemaining] = React.useState(duration);
+  const totalTime = duration;
+  
+  React.useEffect(() => {
+    if (!active) return;
+    
+    const interval = setInterval(() => {
+      setTimeRemaining(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          onTimeUp?.();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    
+    return () => clearInterval(interval);
+  }, [active, onTimeUp]);
+
   const percentage = Math.max(0, Math.min(100, (timeRemaining / totalTime) * 100));
   
-  // Change color based on remaining time
   let colorClass = "bg-brand-green";
   if (percentage < 50) colorClass = "bg-brand-yellow";
   if (timeRemaining <= 10) colorClass = "bg-red-500 animate-pulse drop-shadow-[0_0_15px_rgba(239,68,68,0.8)]";
